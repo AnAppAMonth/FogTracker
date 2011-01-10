@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+	<h2>New Integration</h2>
+	{% if token %}
+	<form action="/edit" method="POST">
+		<input name="token" type="hidden" value="{{token}}"/>
+	{% else %}
+	<form action="/new" method="POST">
+	{% endif %}
+		<table>
+			{% if fburl_empty %}
+			<tr>
+				<td></td>
+				<td colspan="2" class="error">
+					<em>* You must specify the base URL of your FogBugz installation.</em>
+				</td>
+			</tr>
+			{% endif %}
+			<tr>
+				<td>FogBugz base URL:</td>
+				<td><input class="tb" name="fburl" type="edit" value="{{fburl}}"/> <span class="star">*</span></td>
+				<td class="htd">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							Enter the base URL of your FogBugz installation, for FogBugz On Demand users it's <em>https://&lt;fogbugz_id&gt;.fogbugz.com</em>.
+						</span>
+					</a>
+				</td>
+			</tr>
+
+			{% if fbuser_empty %}
+			<tr>
+				<td></td>
+				<td colspan="2" class="error">
+					<em>* You must specify a FogBugz user for use to access the cases.</em>
+				</td>
+			</tr>
+			{% endif %}
+			<tr>
+				<td>FogBugz user email:</td>
+				<td><input class="tb" name="fbuser" type="edit" value="{{fbuser}}"/> <span class="star">*</span></td>
+				<td class="htd">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							Enter the user email used by the integration to access FogBugz. It's recommended that you use a separate user specifically for this purpose.
+						</span>
+					</a>
+				</td>
+			</tr>
+
+			{% if fbpass_empty %}
+			<tr>
+				<td></td>
+				<td colspan="2" class="error">
+					<em>* You must specify the password of the FogBugz user used.</em>
+				</td>
+			</tr>
+			{% endif %}
+			<tr>
+				<td>FogBugz password:</td>
+				<td><input class="tb" name="fbpass" type="password"/> <span class="star">*</span></td>
+				<td class="htd">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							Enter the password of the user.
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td colspan="3">&nbsp;</td>
+			</tr>
+
+			{% if pttoken_empty %}
+			<tr>
+				<td></td>
+				<td colspan="2" class="error">
+					<em>* You must specify the API token of a Tracker user for use to access the stories.</em>
+				</td>
+			</tr>
+			{% endif %}
+			<tr>
+				<td>Tracker token:</td>
+				<td><input class="tb" name="pttoken" type="edit" value="{{pttoken}}"/> <span class="star">*</span></td>
+				<td class="htd">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							Enter the API token of the user account used to access Pivotal Tracker. You can create a new token by selecting
+							<em>Profile -> API Token -> Create New Token</em>. It's recommended that you use a separate user specifically for this purpose.
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td colspan="3">&nbsp;</td>
+			</tr>
+
+			<tr>
+				<td valign="top">Status Mapping:</td>
+				<td><textarea name="mapping" rows="6">{{mapping}}</textarea></td>
+				<td class="htd" valign="top">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							This is just an example of what you can do using a CSS tooltip, feel free to get creative and produce your own!
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td colspan="3">&nbsp;</td>
+			</tr>
+
+			<tr>
+				<td valign="top">Resolve Status:</td>
+				<td><textarea name="resolve" rows="6">{{resolve}}</textarea></td>
+				<td class="htd" valign="top">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							This is just an example of what you can do using a CSS tooltip, feel free to get creative and produce your own!
+						</span>
+					</a>
+				</td>
+			</tr>
+
+			<tr>
+				<td colspan="3" class="disclaimer">
+					<em>* All information gathered here are securely stored in Google's servers, and will never be shared with anyone.</em>
+				</td>
+			</tr>
+			<tr>
+				<td colspan="3"><input type="submit" value="Submit"/></td>
+			</tr>
+		</table>
+	</form>
+{% endblock %}

@@ -1,0 +1,15 @@
+application: fogtracker
+version: 1
+runtime: python
+api_version: 1
+
+handlers:
+- url: /static
+  static_dir: static
+
+- url: /new|/edit|/delete
+  script: main.py
+  login: required
+
+- url: .*
+  script: main.py

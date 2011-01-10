@@ -1,0 +1,52 @@
+<html>
+  <head>
+    <link rel="stylesheet" href="/static/css/main.css" type="text/css" media="screen" />
+  </head>
+  <body>
+	<div class="box">
+		<table width="100%" border="0" cellpadding="0" cellspacing="0">
+			<tr>
+				<td class="tl"></td>
+				<td class="t">&nbsp;</td>
+				<td class="tr"></td>
+			</tr>
+			<tr>
+				<td class="ml"></td>
+				<td class="m">
+					<div style="padding:10px;">
+                      <table width="100%"><tr>
+                        <td valign="top">
+                          <span class="title">
+                            <a class="title" href="/">
+                              <img border="0" src="/static/images/fogtracker.png" align="texttop"/>&nbsp;<font color="#CC6633">Fog</font><font color="#0066CC">Tracker</font>
+                            </a>
+                          </span>
+                          <p class="motto">Integrate FogBugz and Pivotal Tracker</p>
+                        </td>
+                        <td valign="top" align="right">
+                          <a href="{{url}}">{{url_linktext}}</a><br/>
+                          <span class="status">{{status_text}}</span>
+                        </td>
+                      </tr></table>
+                      <p class="hr"/>
+                      {% block content %}{% endblock %}
+                      <p class="hr"/>
+                      <div class="footer">
+                        <div class="poweredby">
+                          <img src="http://code.google.com/appengine/images/appengine-noborder-120x30.gif" alt="Powered by Google App Engine"/>
+                        </div>
+                        <font size=2px>Copyright © 2011 <a href="http://www.ban90.com">ban90.com</a>, All rights reserved.</font>
+                      </div>
+					</div>
+				</td>
+				<td class="mr"></td>
+			</tr>
+			<tr>
+				<td class="bl"></td>
+				<td class="b">&nbsp;</td>
+				<td class="br"></td>
+			</tr>
+		</table>
+	</div>
+  </body>
+</html>

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+  <p>
+    FogTracker is a Free and Open Source Software web application and a free service to integrate the best bug tracker and the best agile planning
+    tool on the web. It is written in Python and for <a href="http://code.google.com/appengine/">Google AppEngine</a>.
+  </p>
+  <h2>Key Features</h2>
+  <p>
+    <ul>
+      <li>one</li>
+      <li>two</li>
+      <li>three</li>
+    </ul>
+  </p>
+  <p>A more complete list of features can be found <a href="/features">here</a>.</p>
+  <p><em>It's strongly advised that you read FogTracker's <a href="/limitations">list of limitations</a> before using it.</em></p>
+  <h2>How To Use</h2>
+  <p>
+    You can test-drive FogTracker (or use it for free if you'd like) on this website, or you can grab the source on
+    <a href="https://github.com/ban90/FogTracker">GitHub</a>, use it, modify it, fork it, and report back any bugs
+    and issues. In either case, you must follow <a href="/howto">these steps</a> to make the integration work.
+  </p>
+
+  {% if signed_in %}
+    <h2>Your Integrations</h2>
+    {% if integrations %}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" class="data">
+        <tr>
+          <th width="20"></th>
+          <th width="auto">Token</th>
+          <th width="135">Created</th>
+          <th width="60">Status</th>
+          <th width="60" align="right">Operations</th>
+        </tr>
+
+      {% for integration in integrations %}
+        <tr>
+          <td width="20"></td>
+          <td width="auto"><a href="/edit?token={{integration.token}}">{{integration.token}}</a></td>
+          <td width="135"><span class="status">{{integration.created}}</span></td>
+          <td width="60">{{integration.status}}</td>
+          <td width="60" align="right">
+            <form class="delete" action="/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete this integration?');">
+              <input name="token" type="hidden" value="{{integration.token}}"/>
+              <input type="submit" value="Delete"/>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </table>
+    {% else %}
+      <em>You haven't created any integration.</em>
+    {% endif %}
+    <p><a class="integration" href="/new"></a></p>
+  {% else %}
+    <table><tr><td><a class="testdrive" href="{{url}}"></a></td><td><em>&nbsp;&nbsp;requires signing in with your Google account</em></td></tr></table>
+  {% endif %}
+
+{% endblock %}

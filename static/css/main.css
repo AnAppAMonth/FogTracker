@@ -1,0 +1,114 @@
+body{font:16px "Trebuchet MS",Tahoma,Arial,Helvetica,Sans-Serif; background-image: url("/static/images/bg.png"); color:#333;}
+a{ color: #0066CC; text-decoration: none; }
+a:hover{ color: #0066CC; text-decoration: underline; }
+a.visited{ color: #0066CC; }
+h2 {color: #CC6633;}
+textarea {width: 100%;}
+
+.box { margin:0 auto; width:960px; padding: 10px; }
+.box .header { font-size: 15px; font-weight: bolder; padding:0px;}
+.box td { padding:0px; margin:0px; background: white; }
+.box .tr { width:16px; height: 16px; background: transparent url("/static/images/tr.png")  no-repeat top right; }
+.box .tl { width:16px; height: 16px; background: transparent url("/static/images/tl.png") no-repeat top left; }
+.box .t {  background: transparent url("/static/images/t.png") repeat-x top left;  font-size: 1px; line-height:1px; }
+.box .mr {width:16px; background: transparent url("/static/images/r.png") repeat-y top right; font-size: 1px; }
+.box .ml {width:16px; background: transparent url("/static/images/l.png") repeat-y top right; font-size: 1px; }
+.box .br { width:16px; height:16px; background: transparent url("/static/images/br.png")  no-repeat top right;  }
+.box .bl { width:16px; height:16px; background: transparent url("/static/images/bl.png") no-repeat top left; }
+.box .b { background: transparent url("/static/images/b.png") repeat-x top left ;  font-size: 1px; line-height:1px;}
+
+a.title:hover { text-decoration: none; }
+span.title{ font-size: 50px; font-weight: bold; }
+span.status{ font-size: 80%; color:#AAA; }
+p.motto{ font-size: 24px; color: #777777; margin-top: 2px; }
+p.hr{ border-top: 1px solid #FF9900; margin-top: 12px; }
+p.hr2{ border-bottom: 1px solid #FF9900; }
+
+.testdrive { display:block; width:203px; height:39px; background: url("/static/images/testdrive.png") 0 0 no-repeat; }
+.testdrive:hover, .testdrive:focus { background-position: -203px 0; }
+.integration { display:block; width:144px; height:37px; background: url("/static/images/integration.png") 0 0 no-repeat; }
+.integration:hover, .integration:focus { background-position: -144px 0; }
+
+.data {
+border: 1px solid #ccc;
+-moz-border-radius: 5px;
+-webkit-border-radius: 5px;
+border-radius: 5px;
+width: 620px;
+-moz-box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.2);
+-webkit-box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.data th {
+font-size: 12px;
+font-weight: bold;
+color: #555;
+background-image: url("/static/images/th.png");
+padding: 2px 5px 2px 5px;
+text-align: left;
+ -moz-border-radius: 5px 5px 0px 0px;
+}
+
+.data td {
+font-size: 14px;
+line-height: bold;
+padding: 5px 5px 5px 5px;
+}
+
+.data td.alt {
+background-color: #f9f9f9;
+}
+
+.tooltip {
+  color: #000000;
+  outline: none;
+  cursor: help;
+  text-decoration: none;
+  position: relative;
+  margin-left: 10px;
+}
+.tooltip:hover { text-decoration: none; }
+.tooltip span {
+  margin-left: -999em;
+  position: absolute;
+}
+
+.tooltip:hover span {
+  font-family: Calibri, Tahoma, Geneva, sans-serif;
+  position: absolute;
+  left: 3em;
+  top: -1em;
+  z-index: 99;
+  margin-left: 0;
+  width: 250px;
+  border-radius: 5px 5px;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.1);
+  -webkit-box-shadow: 5px 5px rgba(0, 0, 0, 0.1);
+  -moz-box-shadow: 5px 5px rgba(0, 0, 0, 0.1);
+}
+.tooltip:hover .helpimg {
+  border: 0;
+  margin: -10px 0 0 -55px;
+  float: left;
+  position: absolute;
+}
+.classic { padding: 0.8em 1em; }
+.custom { padding: 0.5em 0.8em 0.8em 2em; }
+* html a:hover { background: transparent; }
+
+.help { background: #9FDAEE; border: 1px solid #2BB0D7; }
+td.error { color:#FF3366; }
+td.disclaimer { font-size:85%; color:#999; }
+td.htd { width:300px; }
+span.star { color:#FF3366; font-size:110%; font-family: Geneva, Tahoma, Calibri; }
+input.tb {width: 400px;}
+
+span.new {color: #AAAAAA;}
+span.ok {color:#ADD335;}
+span.error {color:#FF3366;}
+form.delete {height:10px;}
+
+div.footer {position:relative; text-align:center; margin-top:-15px;}
+div.poweredby {position:absolute; left:792px;}
