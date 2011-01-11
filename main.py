@@ -119,7 +119,7 @@ class MainPage(webapp.RequestHandler):
 				if pttoken == '':
 					template_values['pttoken_empty'] = True
 
-				if template_values <> {}:
+				if template_values != {}:
 					# A required field is empty, validation failed
 					if token:
 						template_values['token'] = token
@@ -203,12 +203,12 @@ class CaseFeedHandler(webapp.RequestHandler):
 		# This is the query used to specify the cases to include in the feed
 		query = self.request.get('q', '')
 
-		cases = conn.list_cases(query + '%20status:active%20-tag:"ts*"', 'ixBug,ixBugParent,ixBugChildren,sTitle,sPersonAssignedTo,ixCategory,dtOpened,events', 1000)
+		cases = conn.list_cases(query + ' status:active -tag:"ts@*"', 'ixBug,ixBugParent,ixBugChildren,sTitle,sPersonAssignedTo,ixCategory,dtOpened,events', 1000)
 
 		output = '<?xml version="1.0" encoding="UTF-8"?>\n'
 		output += '<external_stories type="array">\n'
 		for case in cases:
-			if case.category_id <> '3':
+			if case.category_id != '3':
 				output += '  <external_story>\n'
 				output += '	<external_id>%s</external_id>\n' % case.id
 				output += '	<name>%s</name>\n' % escape(case.title)
@@ -239,7 +239,7 @@ class CaseFeedHandler(webapp.RequestHandler):
 		output += '</external_stories>\n'
 
 		# If the token has been updated, also update it in the integration object
-		if obj.fbtoken <> conn.token:
+		if obj.fbtoken != conn.token:
 			obj.fbtoken = conn.token
 			obj.put()
 
@@ -249,6 +249,7 @@ class CaseFeedHandler(webapp.RequestHandler):
 class Story(object):
 	def __init__(self, fbid):
 		self.fbid = fbid
+		self.ptproj = None
 		self.ptid = None
 		self.title = None
 		self.state = None
@@ -257,6 +258,12 @@ class Story(object):
 # This class receives activity notifications from Tracker, and updates FogBugz accordingly via API
 class WebHookHandler(webapp.RequestHandler):
 	def post(self, token):
+		# First get the integration object
+		obj = Integration.all().filter('token = ', token).get()
+		if obj is None:
+			self.response.set_status(404)
+			return
+
 		# We must parse the XML no matter what, because any type of event can contain a note/comment in it
 		dom = minidom.parseString(self.request.body)
 		type = dom.getElementsByTagName('event_type')[0].firstChild.nodeValue
@@ -265,9 +272,17 @@ class WebHookHandler(webapp.RequestHandler):
 		for story in stories.childNodes:
 			try:
 				if story.nodeName == 'story':
+					# We only care about stories imported from the FogBugz installation specified in this integration profile.
+					url = story.getElementsByTagName('other_url')[0].firstChild.nodeValue.partition('://')[2]
+					fburl = obj.fburl.partition('://')[2]
+					if url.find(fburl) != 0:
+						# This story isn't an import from this FogBugz installation
+						continue
+
 					fbid = story.getElementsByTagName('other_id')[0].firstChild.nodeValue
 					entry = Story(fbid)
 					if type == 'story_create':
+						entry.ptproj = dom.getElementsByTagName('project_id')[0].firstChild.nodeValue
 						entry.ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
 						entries.append(entry)
 					else:
@@ -291,7 +306,7 @@ class WebHookHandler(webapp.RequestHandler):
 							notes = story.getElementsByTagName('notes')[0]
 							for note in notes.childNodes:
 								if note.nodeName == 'note':
-									self.notes.append(note.getElementsByTagName('text')[0].firstChild.nodeValue)
+									entry.notes.append(note.getElementsByTagName('text')[0].firstChild.nodeValue)
 						except:
 							pass
 						else:
@@ -302,14 +317,8 @@ class WebHookHandler(webapp.RequestHandler):
 			except:
 				pass
 
-		if entries <> []:
+		if entries:
 			# At least one of the listed stories is an import from FogBugz, and more operations are needed
-			# First get the integration object
-			obj = Integration.all().filter('token = ', token).get()
-			if obj is None:
-				self.response.set_status(404)
-				return
-
 			conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
 
 			# We put the author of the activity into the event text to indicate who did this.
@@ -321,13 +330,16 @@ class WebHookHandler(webapp.RequestHandler):
 			for entry in entries:
 				if type == 'story_create':
 					# A new story has just been created (by importing an existing case from FogBugz)
-					# First, set the sComputer field of the corresponding FogBugz case to the URL of the story in Tracker,
-					# and also return a list of all existing events of the FogBugz case
-					fields = ['sComputer', 'sEvent']
-					values = ['https://www.pivotaltracker.com/story/show/%s' % entry.ptid, 'Case imported into Pivotal Tracker by ' + author + '.']
-					case = conn.edit_case(entry.fbid, fields, values, 'ixBug,sProject,events')[0]
+					# First, get all tags and a list of all existing events of the FogBugz case
+					case = conn.list_cases(entry.fbid, 'ixBug,tags,events')[0]
 
-					# Second, add all existing events in this FogBugz case into Tracker as comments on this story
+					# Second, add a tag in the corresponding FogBugz case to link to the story in Tracker,
+					case.tags.insert(0, 'ts@%s-%s' % (entry.ptproj, entry.ptid))
+					fields = ['tags', 'sEvent']
+					values = [','.join(case.tags), 'Case imported into Pivotal Tracker by ' + author + '.']
+					conn.edit_case(entry.fbid, fields, values)
+
+					# Finally, add all existing events in this FogBugz case into Tracker as comments on this story
 					for event in case.events:
 						headers = {}
 						headers['X-TrackerToken'] = obj.pttoken
@@ -340,7 +352,7 @@ class WebHookHandler(webapp.RequestHandler):
 							data += '\n' + event.text
 						data = '<note><text>%s</text></note>' % escape(data)
 
-						urlfetch.fetch('http://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (case.project_title, entry.ptid), payload=data, method='POST', headers=headers, deadline=10)
+						urlfetch.fetch('http://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (entry.ptproj, entry.ptid), payload=data, method='POST', headers=headers, deadline=10)
 				else:
 					# A story has just been edited, currently we only propogate title changes, status changes and new notes/comments to FogBugz
 
@@ -352,7 +364,7 @@ class WebHookHandler(webapp.RequestHandler):
 					case = None
 
 					# Each new note is sent in its own edit request
-					if entry.notes <> []:
+					if entry.notes:
 						# A new comment has just been created, add it to FogBugz as a case event
 						for i in range(len(entry.notes)):
 							if case is None:
@@ -429,7 +441,7 @@ class WebHookHandler(webapp.RequestHandler):
 					else:
 						cmd = 'edit'
 
-					if fields <> [] or cmd <> 'edit':
+					if fields != [] or cmd != 'edit':
 						fields.append('sEvent')
 						values.append('By ' + author + ' in Pivotal Tracker.')
 						conn.edit_case(entry.fbid, fields, values, cmd=cmd)
@@ -439,45 +451,47 @@ class WebHookHandler(webapp.RequestHandler):
 							conn.edit_case(entry.fbid, ['sEvent'], [], cmd='close')
 
 			# If the token has been updated, also update it in the integration object
-			if obj.fbtoken <> conn.token:
+			if obj.fbtoken != conn.token:
 				obj.fbtoken = conn.token
 				obj.put()
 
 		self.response.out.write('OK')
 
-# Original URL used:
-# http://fogtracker.appspot.com/9D35cnPx7ij4ol8h56b-X0dz/?AreaID={AreaID}&AreaName={AreaName}&CaseNumber={CaseNumber}&CaseEventID={CaseEventID}&Category={Category}&TrackerURL={Computer}&EmailBodyText={EmailBodyText}&EmailDate={EmailDate}&EmailSubject={EmailSubject}&EventText={EventText}&EventTime={EventTime}&EventType={EventType}&ProjectName={ProjectName}&StatusName={StatusName}&Title={Title}
+# http://fogtracker.appspot.com/<token>/URLTrigger/?CaseNumber={CaseNumber}&CaseEventID={CaseEventID}&EventType={EventType}
 # This class receives activity notifications from FogBugz, and updates Tracker accordingly via API
 class URLTriggerHandler(webapp.RequestHandler):
 	def get(self, token):
 		cid = self.request.get('CaseNumber')
 		eid = self.request.get('CaseEventID')
-		if cid and eid:
-			# A new case event has occured, let's see whether the case is already imported into Tracker
-			turl = self.request.get('TrackerURL')
-			tid = turl.rpartition('/')[2]
-			try:
-				t = int(tid)
-			except:
-				pass
-			else:
-				# Now fetch all events from that case to get detailed info
-				# First get the integration object
-				obj = Integration.all().filter('token = ', token).get()
-				if obj is None:
-					self.response.set_status(404)
-					return
+		type = self.request.get('EventType')
+		if cid and eid and type:
+			# A new case event has occured
+			# Now fetch all events from that case to get detailed info
+			# First get the integration object
+			obj = Integration.all().filter('token = ', token).get()
+			if obj is None:
+				self.response.set_status(404)
+				return
 
-				conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
+			conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
 
-				case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,events')[0]
+			case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,tags,events')[0]
+
+			# We need to check whether the case is already imported into Tracker
+			proj_id = None
+			tid = None
+			for tag in case.tags:
+				if tag[:3] == 'ts@':
+					t = tag[3:].partition('-')
+					proj_id = t[0]
+					tid = t[2]
+					break
+			if tid:
+				# The case is already imported into Tracker
 				for i in range(len(case.events)-1, -1, -1):
 					if case.events[i].id == eid:
 						# This is the event we just received
 						event = case.events[i]
-
-						# This is the type of the event
-						type = self.request.get('EventType')
 
 						# See what changes have been made
 						tc = False
@@ -486,7 +500,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 							if c.find('Title changed')==0:
 								tc = True
 							else:
-								mo = re.match(r'Revised.*?from\s([\d/]+)\sat\s([\d\:]+)\sUTC', c)
+								mo = re.match(r'Revised.*?from\s([\d/]+)\sat\s([\d:]+)\sUTC', c)
 								if mo:
 									# A comment is changed in this event
 									d = 'T'.join(mo.groups()).replace('/', '-')
@@ -498,7 +512,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 						headers['X-TrackerToken'] = obj.pttoken
 						headers['Content-Type'] = 'application/xml'
 
-						if tc or pe or type <> 'CaseEdited':
+						if tc or pe or type != 'CaseEdited':
 							# We must modify the story (title/description/state)
 							data = '<story>'
 							if tc:
@@ -526,7 +540,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 							data += '</story>'
 
-							urlfetch.fetch('http://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (self.request.get('ProjectName'), tid), payload=data, method='PUT', headers=headers, deadline=10)
+							urlfetch.fetch('http://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=data, method='PUT', headers=headers, deadline=10)
 
 						# Finally add a comment in Tracker to reflect this case event (but only when this event wasn't created as a result of a comment in Tracker)
 						if re.match(r'Comment posted by [^\n]* in Pivotal Tracker:\n', event.text) is None:
@@ -536,14 +550,14 @@ class URLTriggerHandler(webapp.RequestHandler):
 							if event.text:
 								data += '\n' + event.text
 							data = '<note><text>%s</text></note>' % escape(data)
-							urlfetch.fetch('http://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (self.request.get('ProjectName'), tid), payload=data, method='POST', headers=headers, deadline=10)
+							urlfetch.fetch('http://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data, method='POST', headers=headers, deadline=10)
 
 						break
 
-				# If the token has been updated, also update it in the integration object
-				if obj.fbtoken <> conn.token:
-					obj.fbtoken = conn.token
-					obj.put()
+			# If the token has been updated, also update it in the integration object
+			if obj.fbtoken != conn.token:
+				obj.fbtoken = conn.token
+				obj.put()
 
 		self.response.out.write('OK')
 

@@ -14,12 +14,10 @@
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 # OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABIL-
 # ITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-# SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
+# SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 # WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
-
-import xml.sax
 
 from pyfogbugz import XmlHandler
 
@@ -30,7 +28,7 @@ class Filter(object):
         self.name = name
         self.is_current = is_current
         self.connection = connection
-    
+
     def make_current(self):
         response = self.connection.make_request(path="cmd=saveFilter&sFilter=%s" % self.id)
         if response.code == 200:
@@ -43,7 +41,7 @@ class FilterList(XmlHandler):
         self.filters = None
         self.current_filter = None
         self.connection = connection
-    
+
     def startElement(self, name, attrs):
         super(FilterList, self).startElement(name, attrs)
         if name == 'filters':
@@ -55,6 +53,6 @@ class FilterList(XmlHandler):
     def endElement(self, name):
         if name == 'filter' and self.current_filter:
             self.current_filter.name = self.current_value
-            self.filters.append(self.current_filter)    
+            self.filters.append(self.current_filter)
             self.current_filter = None
         super(FilterList, self).endElement(name)

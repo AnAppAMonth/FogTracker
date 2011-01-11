@@ -22,10 +22,8 @@
 """
 Provides connectivity to FogBugz
 """
+import sys
 import urllib
-import urlparse
-import socket
-import errno
 import xml.sax
 import BaseHTTPServer
 msg_dict = BaseHTTPServer.BaseHTTPRequestHandler.responses
@@ -124,9 +122,9 @@ class FogBugzConnection(Connection):
             self._logon()
 
     def make_request(self, path, data=None):
-        computed_path = path
+        computed_path = urllib.quote_plus(path)
         if self.base_path:
-            computed_path = "%s%s" % (self.base_path, path)
+            computed_path = "%s%s" % (self.base_path, computed_path)
             if self.token:
                 computed_path += "&token=%s" % self.token
         return super(FogBugzConnection, self).make_request(computed_path, data)
