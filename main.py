@@ -223,40 +223,49 @@ class CaseFeedHandler(webapp.RequestHandler):
 			# This is the query used to specify the cases to include in the feed
 			query = self.request.get('q', '')
 
-			cases = conn.list_cases(query + ' status:active -tag:"ts@*"', 'ixBug,ixBugParent,ixBugChildren,sTitle,sPersonAssignedTo,ixCategory,dtOpened,events', 1000)
+			cases = conn.list_cases(query + ' status:active -tag:"ts@*"', 'ixBug,ixBugParent,ixBugChildren,sTitle,sPersonAssignedTo,sCategory,dtOpened,tags,events', 500)
 
 			for case in cases:
-				if case.category_id != '3':
-					output += '  <external_story>\n'
-					output += '	<external_id>%s</external_id>\n' % case.id
-					output += '	<name>%s</name>\n' % escape(case.title)
+				output += ' <external_story>\n'
+				output += '  <external_id>%s</external_id>\n' % case.id
+				output += '  <name>%s</name>\n' % escape(case.title)
 
-					summary = case.events[0].text
-					if case.parent_case > '0':
-						summary = 'Parent Case: %s/default.asp?%s\n\n' % (conn.url, case.parent_case) + summary
-					if case.child_cases:
-						summary += '\n\nChild Cases:'
-						for cc in case.child_cases.split(','):
-							summary += '\n%s/default.asp?' % conn.url + cc
-					output += '	<description>%s</description>\n' % escape(summary)
+				summary = case.events[0].text
+				if case.parent_case > '0':
+					summary = 'Parent Case: %s/default.asp?%s\n\n' % (conn.url, case.parent_case) + summary
+				if case.child_cases:
+					summary += '\n\nChild Cases:'
+					for cc in case.child_cases.split(','):
+						summary += '\n%s/default.asp?' % conn.url + cc
+				output += '  <description>%s</description>\n' % escape(summary)
 
-					output += '	<requested_by>%s</requested_by>\n' % escape(case.assigned_to_name)
-					output += '	<created_at type="datetime">%s</created_at>\n' % case.date_opened.replace('T', ' ').replace('Z', ' UTC')
+				output += '  <requested_by>%s</requested_by>\n' % escape(case.assigned_to_name)
+				output += '  <created_at type="datetime">%s</created_at>\n' % case.date_opened.replace('T', ' ').replace('Z', ' UTC')
 
-					if case.category_id == '1':
-						tp = 'bug'
-					elif case.category_id == '2':
-						tp = 'feature'
-					elif case.category_id == '4':
-						tp = 'release'
+				# Get the corresponding Tracker story type from the FogBugz category name
+				category = case.category_name.lower()
+
+				stype = None
+				for ln in obj.mapping.splitlines():
+					t = ln.partition('=')
+					if t[0].strip().lower() == category:
+						stype = t[2].strip().lower()
+						break
+
+				if stype is None:
+					if category == 'bug' or category == 'feature':
+						stype = category
+					elif category == 'schedule item':
+						stype = 'release'
 					else:
-						tp = 'chore'
-					output += '	<story_type>%s</story_type>\n' % tp
+						stype = 'chore'
 
-					if obj.tagsync:
-						output += ' <labels>%s</labels>\n' % escape(','.join(case.tags))
+				output += '  <story_type>%s</story_type>\n' % stype
 
-					output += '  </external_story>\n'
+				if obj.tagsync:
+					output += '  <labels>%s</labels>\n' % escape(','.join(case.tags))
+
+				output += ' </external_story>\n'
 		except (FogBugzClientError, FogBugzServerError):
 			stat = '<span class="error">Error</span>'
 
