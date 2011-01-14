@@ -302,10 +302,14 @@ class WebHookHandler(webapp.RequestHandler):
 					# integration profile.
 					if story.getElementsByTagName('integration_id'):
 						# This story is an import, check the source
-						url = story.getElementsByTagName('other_url')[0].firstChild.nodeValue.partition('://')[2]
-						fburl = obj.fburl.partition('://')[2]
-						if url.find(fburl) != 0:
-							# This story was not imported from this FogBugz installation, nothing needs to be done
+						try:
+							url = story.getElementsByTagName('other_url')[0].firstChild.nodeValue.partition('://')[2]
+							fburl = obj.fburl.partition('://')[2]
+							if url.find(fburl) != 0:
+								# This story was not imported from this FogBugz installation, nothing needs to be done
+								continue
+						except IndexError:
+							# This story is under another kind of integration
 							continue
 					else:
 						# This story isn't an import from any source, check its labels if obj.ptprop is True
@@ -409,23 +413,24 @@ class WebHookHandler(webapp.RequestHandler):
 					else:
 						# Only record title changes, category changes, status changes, label changes and new notes
 						changed = False
+
 						try:
 							entry.title = story.getElementsByTagName('name')[0].firstChild.nodeValue
-						except:
+						except IndexError:
 							pass
 						else:
 							changed = True
 
 						try:
 							entry.stype = story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
-						except:
+						except IndexError:
 							pass
 						else:
 							changed = True
 
 						try:
 							entry.state = story.getElementsByTagName('current_state')[0].firstChild.nodeValue.lower()
-						except:
+						except IndexError:
 							pass
 						else:
 							changed = True
@@ -433,7 +438,7 @@ class WebHookHandler(webapp.RequestHandler):
 						if obj.tagsync:
 							try:
 								entry.labels = story.getElementsByTagName('labels')[0].firstChild.nodeValue
-							except:
+							except IndexError:
 								pass
 							else:
 								changed = True
@@ -443,7 +448,7 @@ class WebHookHandler(webapp.RequestHandler):
 							for note in notes.childNodes:
 								if note.nodeName == 'note':
 									entry.notes.append(note.getElementsByTagName('text')[0].firstChild.nodeValue)
-						except:
+						except IndexError:
 							pass
 						else:
 							changed = True
