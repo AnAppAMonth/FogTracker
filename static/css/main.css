@@ -51,7 +51,6 @@ text-align: left;
 
 .data td {
 font-size: 14px;
-line-height: bold;
 padding: 5px 5px 5px 5px;
 }
 
@@ -102,8 +101,9 @@ background-color: #f9f9f9;
 td.error { color:#FF3366; }
 td.disclaimer { font-size:85%; color:#999; }
 td.htd { width:300px; }
-span.star { color:#FF3366; font-size:110%; font-family: Geneva, Tahoma, Calibri; }
+span.star { color:#FF3366; font-size:110%; font-family: Geneva, Tahoma, Calibri, sans-serif; }
 input.tb {width: 400px;}
+input.cb {margin-top: 5px;}
 
 span.new {color: #AAAAAA;}
 span.ok {color:#ADD335;}

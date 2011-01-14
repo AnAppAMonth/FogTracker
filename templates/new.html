@@ -104,14 +104,104 @@
 			</tr>
 
 			<tr>
-				<td valign="top">Status Mapping:</td>
+				<td valign="top">Options:</td>
+				<td>
+					<table border="0" cellspacing="0" cellpadding="0"><tr>
+						<td valign="top"><input class="cb" type="checkbox" name="tagsync" value="on"{% if tagsync %} checked="true"{% endif %} /></td>
+						<td>Synchronize tags and labels in linked FogBugz cases<br/> and Tracker stories</td>
+					</tr></table>
+				</td>
+				<td class="htd" valign="top">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							If checked, when a tag (FogBugz) or a label (Tracker) is added to or removed from a case or
+							story, and if the case or story has a counterpart at the other side of the integration, the
+							operation is mirrored on the other side, too.
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td valign="top"></td>
+				<td>
+					<table border="0" cellspacing="0" cellpadding="0"><tr>
+						<td valign="top"><input class="cb" type="checkbox" name="ptprop" value="on"{% if ptprop %} checked="true"{% endif %} /></td>
+						<td>Propagate new Tracker stories with <em>a certain label</em><br/> to FogBugz</td>
+					</tr></table>
+				</td>
+				<td class="htd" valign="top">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							If checked, for each new Tracker story with a label of the form <em>fb:&lt;proj&gt;</em>, if
+							it doesn't already have a corresponding case in FogBugz, such a case will be created under
+							the project &lt;proj&gt;, and the Tracker story will be linked to the new FogBugz case. The
+							special label itself won't be added to the new case (as a tag, even if the synchronization
+							option above is checked), and can later be removed without any effects.
+						</span>
+					</a>
+				</td>
+			</tr>
+
+			{% if ptintid_empty %}
+			<tr>
+				<td></td>
+				<td colspan="2" class="error">
+					<em>
+						* You must specify the integration ID in Tracker if you choose to propagate certain new Tracker<br/>
+						stories to FogBugz. This ID is needed to link the Tracker story in question to the new FogBugz<br/>
+						case created.
+					</em>
+				</td>
+			</tr>
+			{% endif %}
+			<tr>
+				<td>Tracker<br/>Integration ID:</td>
+				<td><input class="tb" name="ptintid" type="edit" value="{{ptintid}}"/></td>
+				<td class="htd">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							<p>To get the integration ID in Tracker, follow step 4b in the how-to page to create a new
+							integration of type <em>Other</em>. Fill in anything in the <em>Base URL</em> field and click
+							<em>Save</em>. You will now see this newly created integration in the <em>External Tool
+							Integrations</em> section. Hover your mouse over the <em>Edit</em> link to see the URL, the
+							last number in it (right before "/edit") is the integration ID.</p>
+							<p>Later you will have to edit this integration in Tracker to fill in necessary information,
+							as detailed in step 4b of the how-to page.</p>
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td colspan="3">&nbsp;</td>
+			</tr>
+
+			<tr>
+				<td valign="top">Category Mapping:</td>
 				<td><textarea name="mapping" rows="6">{{mapping}}</textarea></td>
 				<td class="htd" valign="top">
 					<a class="tooltip" href="#" tabindex="-1">
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							This is just an example of what you can do using a CSS tooltip, feel free to get creative and produce your own!
+							Specify the mappings between FogBugz categories and Tracker story types. By default the
+							following mappings are used:<br/>
+							<p><em>
+								Bug = Bug<br/>
+								Feature = Feature<br/>
+								Chore = Chore<br/>
+								Inquiry = Chore<br/>
+								Schedule Item = Release<br/>
+								* = Chore
+							</em></p>
+							These mappings are evaluated from top to bottom, and the first match will be used. For example,
+							The corresponding FogBugz category of the Tracker type "Chore" is "Chore", not "Inquiry". Your
+							specified mappings are evaluated before the default ones (also from top to bottom).
 						</span>
 					</a>
 				</td>
@@ -128,7 +218,10 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							This is just an example of what you can do using a CSS tooltip, feel free to get creative and produce your own!
+							Specify the status a FogBugz case under each category should be resolved to when its counterpart
+							in Tracker is finished. Each line should contain the resolve status of one category, in the
+							form <em>Category:Status_ID</em> (e.g. <em>Bug:2</em>). If not specified the default resolve
+							status is used.
 						</span>
 					</a>
 				</td>
