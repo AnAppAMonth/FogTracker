@@ -104,6 +104,7 @@ td.htd { width:300px; }
 span.star { color:#FF3366; font-size:110%; font-family: Geneva, Tahoma, Calibri, sans-serif; }
 input.tb {width: 400px;}
 input.cb {margin-top: 5px;}
+p.bold {color:#f39;}
 
 span.new {color: #AAAAAA;}
 span.ok {color:#ADD335;}

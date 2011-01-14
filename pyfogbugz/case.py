@@ -231,7 +231,7 @@ class CaseList(XmlHandler):
 				self.current_case.child_cases = self.current_value
 			elif name == 'tag':
 				if self.current_case.tags is not None:
-					self.current_case.tags.append(self.current_value)
+					self.current_case.tags.append(self.current_value.strip())
 			elif name == 'fOpen':
 				if self.current_value == 'false':
 					self.current_case.is_open = False

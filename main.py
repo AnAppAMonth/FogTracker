@@ -249,6 +249,9 @@ class CaseFeedHandler(webapp.RequestHandler):
 					tp = 'chore'
 				output += '	<story_type>%s</story_type>\n' % tp
 
+				if obj.tagsync:
+					output += ' <labels>%s</labels>\n' % escape(','.join(case.tags))
+
 				output += '  </external_story>\n'
 		output += '</external_stories>\n'
 
@@ -265,7 +268,9 @@ class Story(object):
 		self.fbid = fbid
 		self.ptid = None
 		self.title = None
+		self.stype = None
 		self.state = None
+		self.labels = None
 		self.notes = []
 
 # This class receives activity notifications from Tracker, and updates FogBugz accordingly via API
@@ -395,15 +400,14 @@ class WebHookHandler(webapp.RequestHandler):
 					# If we are here, it means this story is an import from this FogBugz installation
 					fbid = story.getElementsByTagName('other_id')[0].firstChild.nodeValue
 					entry = Story(fbid)
+					entry.ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
 					if type == 'story_create':
-						entry.ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
 						entries.append(entry)
 					elif type == 'story_delete':
-						entry.ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
 						entry.state = 'accepted'
 						entries.append(entry)
 					else:
-						# Only record title changes, status changes, and new notes
+						# Only record title changes, category changes, status changes, label changes and new notes
 						changed = False
 						try:
 							entry.title = story.getElementsByTagName('name')[0].firstChild.nodeValue
@@ -413,11 +417,26 @@ class WebHookHandler(webapp.RequestHandler):
 							changed = True
 
 						try:
-							entry.state = story.getElementsByTagName('current_state')[0].firstChild.nodeValue
+							entry.stype = story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
 						except:
 							pass
 						else:
 							changed = True
+
+						try:
+							entry.state = story.getElementsByTagName('current_state')[0].firstChild.nodeValue.lower()
+						except:
+							pass
+						else:
+							changed = True
+
+						if obj.tagsync:
+							try:
+								entry.labels = story.getElementsByTagName('labels')[0].firstChild.nodeValue
+							except:
+								pass
+							else:
+								changed = True
 
 						try:
 							notes = story.getElementsByTagName('notes')[0]
@@ -466,11 +485,13 @@ class WebHookHandler(webapp.RequestHandler):
 
 						urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data, method='POST', headers=headers, deadline=10)
 				else:
-					# A story has just been edited, currently we only propogate title changes, status changes and new notes/comments to FogBugz
+					# A story has just been edited, currently we only propogate title changes, category changes, status
+					# changes, label changes and new notes/comments to FogBugz
 
-					# If multiple actions are performed at once, we first create a Fogbugz case event for each note/comment included, and finally
-					# create another case event for all other changes (if any), including title and status changes. We feel it makes more sense
-					# this way (e.g. comments on why an action is performed appear before the action itself), and it also saves some work.
+					# If multiple actions are performed at once, we first create a Fogbugz case event for each note/comment
+					# included, and finally create another case event for all other changes (if any), including title,
+					# category, status and label changes. We feel it makes more sense this way (e.g. comments on why an
+					# action is performed appear before the action itself), and it also saves some work.
 
 					# An instance of Case that contains information we need for certain operations
 					case = None
@@ -491,6 +512,29 @@ class WebHookHandler(webapp.RequestHandler):
 					if entry.title is not None:
 						fields.append('sTitle')
 						values.append(entry.title)
+
+					if entry.stype is not None:
+						# Get the corresponding FogBugz category of the Tracker type entry.stype
+						category = None
+						for ln in obj.mapping.splitlines():
+							t = ln.partition('=')
+							if t[2].strip().lower() == entry.stype:
+								category = t[0].strip()
+								break
+
+						# entry.stype is either 'bug', 'feature', 'chore' or 'release'
+						if category is None:
+							if entry.stype == 'release':
+								category = 'Schedule Item'
+							else:
+								category = entry.stype
+
+						fields.append('sCategory')
+						values.append(category)
+
+					if entry.labels is not None:
+						fields.append('sTags')
+						values.append('ts@%s-%s,%s' % (proj_id, entry.ptid, entry.labels))
 
 					# Status changes are tricky, as there are restrictions on which status can be changed to which status,
 					# while no such restrictions exist in Tracker.
@@ -551,7 +595,7 @@ class WebHookHandler(webapp.RequestHandler):
 											t = s
 									status = t[4]
 
-									# Since the story in Tracker is deleted, we also need to remove the tag in the
+									# Since the story in Tracker is deleted, we also need to remove the special tag in the
 									# corresponding FogBugz case.
 									modified = False
 									for i in range(len(case.tags)-1, -1, -1):
@@ -603,16 +647,15 @@ class URLTriggerHandler(webapp.RequestHandler):
 		type = self.request.get('EventType')
 		if cid and eid and type:
 			# A new case event has occured
-			# Now fetch all events from that case to get detailed info
 			# First get the integration object
 			obj = Integration.all().filter('token = ', token).get()
 			if obj is None:
 				self.response.set_status(404)
 				return
 
+			# Now fetch all events from that case to get detailed info
 			conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
-
-			case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,tags,events')[0]
+			case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,sCategory,tags,events')[0]
 
 			# We need to check whether the case is already imported into Tracker
 			proj_id = None
@@ -631,26 +674,38 @@ class URLTriggerHandler(webapp.RequestHandler):
 						event = case.events[i]
 
 						# See what changes have been made
-						tc = False
-						pe = False
-						for c in event.changes.split('\n'):
-							if c.find('Title changed')==0:
-								tc = True
-							else:
-								mo = re.match(r'Revised.*?from\s([\d/]+)\sat\s([\d:]+)\sUTC', c)
-								if mo:
-									# A comment is changed in this event
-									d = 'T'.join(mo.groups()).replace('/', '-')
-									if case.events[0].date.find(d) == 0:
-										# The first comment is changed
-										pe = True
+						tc = False		# the title was changed
+						pe = False		# the first post was edited
+						cc = False		# the category was changed
+						tar = False		# one or more tags were added or removed
+
+						mo = re.search(r'(?:^|\.\s)Title changed from ', event.changes, re.MULTILINE)
+						if mo:
+							tc = True
+
+						mo = re.search(r'(?:^|\.\s)Revised.*?from\s([\d/]+)\sat\s([\d:]+)\sUTC', event.changes, re.MULTILINE)
+						if mo:
+							# A comment is changed in this event
+							d = 'T'.join(mo.groups()).replace('/', '-')
+							if case.events[0].date.find(d) == 0:
+								# The first comment is changed
+								pe = True
+
+						mo = re.search(r'(?:^|\.\s)Category changed from ', event.changes, re.MULTILINE)
+						if mo:
+							cc = True
+
+						if obj.tagsync:
+							mo = re.search(r"(?:^|\.\s)(Added|Removed) tag '", event.changes, re.MULTILINE)
+							if mo:
+								tar = True
 
 						headers = {}
 						headers['X-TrackerToken'] = obj.pttoken
 						headers['Content-Type'] = 'application/xml'
 
-						if tc or pe or type != 'CaseEdited':
-							# We must modify the story (title/description/state)
+						if tc or pe or cc or tar or type != 'CaseEdited':
+							# We must modify the story (title/description/category/labels/state)
 							data = '<story>'
 							if tc:
 								data += '<name>%s</name>' % escape(case.title)
@@ -664,6 +719,34 @@ class URLTriggerHandler(webapp.RequestHandler):
 									for cc in case.child_cases.split(','):
 										summary += '\n%s/default.asp?' % conn.url + cc
 								data += '<description>%s</description>' % escape(summary)
+
+							if cc:
+								# Get the corresponding Tracker story type from the FogBugz category name
+								category = case.category_name.lower()
+
+								stype = None
+								for ln in obj.mapping.splitlines():
+									t = ln.partition('=')
+									if t[0].strip().lower() == category:
+										stype = t[2].strip().lower()
+										break
+
+								if stype is None:
+									if category == 'bug' or category == 'feature':
+										stype = category
+									elif category == 'schedule item':
+										stype = 'release'
+									else:
+										stype = "chore"
+
+								data += '<story_type>%s</story_type>' % escape(stype)
+
+							if tar:
+								# First remove the special tag
+								for i in range(len(case.tags)-1, -1, -1):
+									if case.tags[i][:3] == 'ts@':
+										del case.tags[i]
+								data += '<labels>%s</labels>' % escape(','.join(case.tags))
 
 							if type == 'CaseResolved':
 								# Finish the story in Tracker
@@ -681,7 +764,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 						# Finally add a comment in Tracker to reflect this case event (but only when this event wasn't created as a result of a comment in Tracker)
 						if re.match(r'Comment posted by [^\n]* in Pivotal Tracker:\n', event.text) is None:
-							data = event.description
+							data = event.description + ' in FogBugz'
 							if event.changes:
 								data += '\n' + event.changes
 							if event.text:
