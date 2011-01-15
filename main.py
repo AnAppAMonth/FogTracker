@@ -260,7 +260,7 @@ class CaseFeedHandler(webapp.RequestHandler):
 					else:
 						stype = 'chore'
 
-				output += '  <story_type>%s</story_type>\n' % stype
+				output += '  <story_type>%s</story_type>\n' % escape(stype)
 
 				if obj.tagsync:
 					output += '  <labels>%s</labels>\n' % escape(','.join(case.tags))
@@ -494,28 +494,31 @@ class WebHookHandler(webapp.RequestHandler):
 						# First, get all tags and a list of all existing events of the FogBugz case
 						case = conn.list_cases(entry.fbid, 'ixBug,tags,events')[0]
 
-						# Second, add a tag in the corresponding FogBugz case to link to the story in Tracker,
+						# Second, add a tag in the corresponding FogBugz case to link to the story in Tracker
 						case.tags.insert(0, 'ts@%s-%s' % (proj_id, entry.ptid))
 						fields = ['tags', 'sEvent']
 						values = [','.join(case.tags), 'Case imported into Pivotal Tracker by ' + author + '.']
 						conn.edit_case(entry.fbid, fields, values)
 
 						# Finally, add all existing events in this FogBugz case into Tracker as comments on this story
+						headers = {}
+						headers['X-TrackerToken'] = obj.pttoken
+						headers['Content-Type'] = 'application/xml'
+						first = True
 						for event in case.events:
-							headers = {}
-							headers['X-TrackerToken'] = obj.pttoken
-							headers['Content-Type'] = 'application/xml'
-
-							data = event.description
+							data = event.description + ' in FogBugz'
 							if event.changes:
 								data += '\n' + event.changes
-							if event.text:
+							if event.text and not first:
 								data += '\n' + event.text
 							data = '<note><text>%s</text></note>' % escape(data)
 
 							resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data, method='POST', headers=headers, deadline=10)
 							if resp.status_code >= 300:
 								stat = '<span class="error">Error</span>'
+
+							first = False
+
 					except (FogBugzClientError, FogBugzServerError):
 						stat = '<span class="error">Error</span>'
 				else:
@@ -531,18 +534,17 @@ class WebHookHandler(webapp.RequestHandler):
 					case = None
 
 					# Each new note is sent in its own edit request
-					if entry.notes:
+					for note in entry.notes:
 						# A new comment has just been created, add it to FogBugz as a case event
-						for i in range(len(entry.notes)):
-							try:
-								if case is None:
-									case = conn.edit_case(entry.fbid, ['sEvent'], ['Comment posted by ' + author + ' in Pivotal Tracker:\n\n' + entry.notes[i]], 'ixBug,tags,ixCategory,sCategory')[0]
-								else:
-									conn.edit_case(entry.fbid, ['sEvent'], ['Comment posted by ' + author + ' in Pivotal Tracker:\n\n' + entry.notes[i]])
-							except (FogBugzClientError, FogBugzServerError):
-								stat = '<span class="error">Error</span>'
+						try:
+							if case is None:
+								case = conn.edit_case(entry.fbid, ['sEvent'], ['Comment posted by ' + author + ' in Pivotal Tracker:\n\n' + note], 'ixBug,tags,ixCategory,sCategory')[0]
+							else:
+								conn.edit_case(entry.fbid, ['sEvent'], ['Comment posted by ' + author + ' in Pivotal Tracker:\n\n' + note])
+						except (FogBugzClientError, FogBugzServerError):
+							stat = '<span class="error">Error</span>'
 
-					# Title and status changes are incorporated in a single edit request
+					# Title, category, status and label changes are incorporated into a single edit request
 					fields = []
 					values = []
 
@@ -571,10 +573,14 @@ class WebHookHandler(webapp.RequestHandler):
 
 					if entry.labels is not None:
 						fields.append('sTags')
-						values.append('ts@%s-%s,%s' % (proj_id, entry.ptid, entry.labels))
+						if entry.labels:
+							values.append('ts@%s-%s,%s' % (proj_id, entry.ptid, entry.labels))
+						else:
+							values.append('ts@%s-%s' % (proj_id, entry.ptid))
 
 					# Status changes are tricky, as there are restrictions on which status can be changed to which status,
 					# while no such restrictions exist in Tracker.
+					cmd = 'edit'
 					extra = False
 					if entry.state in ('started', 'finished', 'accepted'):
 						# We need to know the current status of the FogBugz case to decide which command to use
@@ -604,7 +610,7 @@ class WebHookHandler(webapp.RequestHandler):
 							elif entry.state == 'finished':
 								# Resolve the case in FogBugz only when it's currently active
 								if 'resolve' in case.operations and 'reactivate' not in case.operations:
-									# This one is especially tricky as we must find out the proper status to resolve to
+									# This one is especially tricky as we must decide the proper status to resolve to
 									cmd = 'resolve'
 
 									# There are two scenarios where we need to resolve a case in FogBugz: either its counterpart
@@ -613,27 +619,15 @@ class WebHookHandler(webapp.RequestHandler):
 									# latter case, a simple algorithm is used to determine the resolve status.
 									status = None
 									if type != 'story_delete':
-										# We try to find the status to resolve to in configuration
+										# We try to find the status to resolve to in configuration, and if failed, the
+										# default resolve status will be used
 										for line in obj.resolve.splitlines():
 											t = line.partition(':')
 											if t[0].strip().lower() == case.category_name.lower():
 												status = t[2].strip()
 												break
 									else:
-										# First fetch all resolved statuses of this category from FogBugz
-										statuses = conn.list_statuses(case.category_id, True)
-
-										# Now choose the "best" status in the list to use.
-										# The criteria is to prefer statuses that are "deleted", a "duplicate", not "work done",
-										# and order lowly, in this order.
-										t = None
-										for i in range(len(statuses)):
-											s = (statuses[i].is_deleted, statuses[i].is_duplicate, not statuses[i].is_work_done, statuses[i].order, statuses[i].id)
-											if t is None or s > t:
-												t = s
-										status = t[4]
-
-										# Since the story in Tracker is deleted, we also need to remove the special tag in the
+										# Since the story in Tracker is deleted, we need to remove the special tag in the
 										# corresponding FogBugz case.
 										modified = False
 										for i in range(len(case.tags)-1, -1, -1):
@@ -645,16 +639,28 @@ class WebHookHandler(webapp.RequestHandler):
 											fields.append('sTags')
 											values.append(','.join(case.tags))
 
+										# Back to the task, first fetch all resolved statuses of this category from FogBugz
+										statuses = conn.list_statuses(case.category_id, True)
+
+										# Now choose the "best" status in the list to use.
+										# The criteria is to prefer statuses that are "deleted", a "duplicate", not "work done",
+										# and order lowly, in this order.
+										t = None
+										for status in statuses:
+											s = (status.is_deleted, status.is_duplicate, not status.is_work_done, status.order, status.id)
+											if t is None or s > t:
+												t = s
+										status = t[4]
+
 									if status is not None:
 										# Finally, insert the status into fields
 										fields.append('ixStatus')
 										values.append(status)
+
 						except (FogBugzClientError, FogBugzServerError):
 							stat = '<span class="error">Error</span>'
-					else:
-						cmd = 'edit'
 
-					if fields != [] or cmd != 'edit':
+					if fields or cmd != 'edit':
 						fields.append('sEvent')
 						if type != 'story_delete':
 							values.append('By ' + author + ' in Pivotal Tracker.')
@@ -700,10 +706,10 @@ class URLTriggerHandler(webapp.RequestHandler):
 				return
 			stat = '<span class="ok">OK</span>'
 
-			try:
-				# Now fetch all events from that case to get detailed info
-				conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
+			# Fetch all events from that case to get detailed info
+			conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
 
+			try:
 				case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,sCategory,tags,events')[0]
 
 				# We need to check whether the case is already imported into Tracker
@@ -715,7 +721,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 						proj_id = t[0]
 						tid = t[2]
 						break
-				if tid:
+				if proj_id and tid:
 					# The case is already imported into Tracker
 					for i in range(len(case.events)-1, -1, -1):
 						if case.events[i].id == eid:
@@ -728,11 +734,11 @@ class URLTriggerHandler(webapp.RequestHandler):
 							cc = False		# the category was changed
 							tar = False		# one or more tags were added or removed
 
-							mo = re.search(r'(?:^|\.\s)Title changed from ', event.changes, re.MULTILINE)
+							mo = re.search(r'(?:^|\.\s+)Title changed from ', event.changes, re.MULTILINE)
 							if mo:
 								tc = True
 
-							mo = re.search(r'(?:^|\.\s)Revised.*?from\s([\d/]+)\sat\s([\d:]+)\sUTC', event.changes, re.MULTILINE)
+							mo = re.search(r'(?:^|\.\s+)Revised.*?from\s([\d/]+)\sat\s([\d:]+)\sUTC', event.changes, re.MULTILINE)
 							if mo:
 								# A comment is changed in this event
 								d = 'T'.join(mo.groups()).replace('/', '-')
@@ -740,12 +746,12 @@ class URLTriggerHandler(webapp.RequestHandler):
 									# The first comment is changed
 									pe = True
 
-							mo = re.search(r'(?:^|\.\s)Category changed from ', event.changes, re.MULTILINE)
+							mo = re.search(r'(?:^|\.\s+)Category changed from ', event.changes, re.MULTILINE)
 							if mo:
 								cc = True
 
 							if obj.tagsync:
-								mo = re.search(r"(?:^|\.\s)(Added|Removed) tag '", event.changes, re.MULTILINE)
+								mo = re.search(r"(?:^|\.\s+)(Added|Removed) tag '", event.changes, re.MULTILINE)
 								if mo:
 									tar = True
 
