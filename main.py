@@ -599,6 +599,19 @@ class WebHookHandler(webapp.RequestHandler):
 									entry.state = 'finished'
 									extra = True
 
+								if type == 'story_delete':
+									# Since the story in Tracker is deleted, we need to remove the special tag in the
+									# corresponding FogBugz case.
+									modified = False
+									for i in range(len(case.tags)-1, -1, -1):
+										if case.tags[i][:3] == 'ts@':
+											del case.tags[i]
+											modified = True
+
+									if modified:
+										fields.append('sTags')
+										values.append(','.join(case.tags))
+
 							if entry.state == 'started':
 								# Reactivate/reopen the case in FogBugz, if not already active
 								if 'reactivate' in case.operations:
@@ -627,19 +640,7 @@ class WebHookHandler(webapp.RequestHandler):
 												status = t[2].strip()
 												break
 									else:
-										# Since the story in Tracker is deleted, we need to remove the special tag in the
-										# corresponding FogBugz case.
-										modified = False
-										for i in range(len(case.tags)-1, -1, -1):
-											if case.tags[i][:3] == 'ts@':
-												del case.tags[i]
-												modified = True
-
-										if modified:
-											fields.append('sTags')
-											values.append(','.join(case.tags))
-
-										# Back to the task, first fetch all resolved statuses of this category from FogBugz
+										# First fetch all resolved statuses of this category from FogBugz
 										statuses = conn.list_statuses(case.category_id, True)
 
 										# Now choose the "best" status in the list to use.
