@@ -38,8 +38,9 @@ from pyfogbugz.status import StatusList
 AVAILABLE_CASE_COLUMNS = ('ixBug', 'ixBugParent', 'ixBugChildren', 'tags', 'fOpen', 'sTitle', 'sLatestTextSummary', 'ixBugEventLatestText', 'ixProject', 'sProject', 'ixArea', 'sArea', 'ixGroup', 'ixPersonAssignedTo', 'sPersonAssignedTo', 'sEmailAssignedTo', 'ixPersonOpenedBy', 'ixPersonResolvedBy', 'ixPersonClosedBy', 'ixPersonLastEditedBy', 'ixStatus', 'sStatus', 'ixPriority', 'sPriority', 'ixFixFor', 'sFixFor', 'dtFixFor', 'sVersion', 'sComputer', 'hrsOrigEst', 'hrsCurrEst', 'hrsElapsed', 'c', 'sCustomerEmail', 'ixMailbox', 'ixCategory', 'sCategory', 'dtOpened', 'dtResolved', 'dtClosed', 'ixBugEventLatest', 'dtLastUpdated', 'fReplied', 'fForwarded', 'sTicket', 'ixDiscussTopic', 'dtDue', 'sReleaseNotes', 'ixBugEventLastView', 'dtLastView', 'ixRelatedBugs', 'sScoutDescription', 'sScoutMessage', 'fScoutStopReporting', 'fSubscribed', 'events')
 
 class Connection(object):
-	def __init__(self, url):
+	def __init__(self, url, offline):
 		self.url = url
+		self.offline = offline
 
 	def make_request(self, path, data=None):
 		response = None
@@ -54,7 +55,10 @@ class Connection(object):
 
 		try:
 			url = "%s/%s" % (self.url, path)
-			response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=10)
+			if self.offline:
+				response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=60)
+			else:
+				response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=10)
 			if response.status_code < 300:
 				return response
 		except KeyboardInterrupt:
@@ -111,12 +115,12 @@ class LogonHandler(XmlHandler):
 class FogBugzConnection(Connection):
 	# This class will try to use the token first (if provided), but if a request fails because the token is not valid
 	# any more, it will automatically log in with the username and password and update the token.
-	def __init__(self, url, username, password, token=None):
+	def __init__(self, url, username, password, token=None, offline=False):
 		self.username = username
 		self.password = password
 		self.token = token
 		self.base_path = None
-		super(FogBugzConnection, self).__init__(url)
+		super(FogBugzConnection, self).__init__(url, offline)
 		self._check_api()
 		if token is None:
 			self._logon()
