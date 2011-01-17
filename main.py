@@ -25,6 +25,7 @@ import re, random, time
 from datetime import datetime
 from xml.sax.saxutils import escape
 from xml.dom import minidom
+from xml.parsers.expat import ExpatError
 
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import util, template
@@ -449,15 +450,39 @@ class WebHookHandler(webapp.RequestHandler):
 
 											case = conn.edit_case(None, fields, values, cmd = 'new')[0]
 
-											# Add a comment to the case to indicate that this is imported from Tracker
-											conn.edit_case(case.id, ['sEvent'], ['Story created and imported into FogBugz by ' + author + '.'])
-
-											# Finally, we must link the story in Tracker to the FogBugz case
+											# We must link the story in Tracker to the FogBugz case
 											headers = {}
 											headers['X-TrackerToken'] = obj.pttoken
 											headers['Content-Type'] = 'application/xml'
 											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id></story>' % (case.id, obj.ptintid)
 											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), payload=data, method='PUT', headers=headers, deadline=deadline)
+											if resp.status_code >= 300:
+												stat = '<span class="error">Error</span>'
+
+											# Create a case event for each note/comment in the Tracker story
+											try:
+												rdom = minidom.parseString(resp.content)
+												story = rdom.getElementsByTagName('story')[0]
+											except (ExpatError, IndexError):
+												stat = '<span class="error">Error</span>'
+											else:
+												notes = story.getElementsByTagName('notes')
+												if notes:
+													for note in notes[0].childNodes:
+														if note.nodeName == 'note':
+															dt = note.getElementsByTagName('text')[0].firstChild.nodeValue
+															au = note.getElementsByTagName('author')[0].firstChild.nodeValue
+															tm = note.getElementsByTagName('noted_at')[0].firstChild.nodeValue
+															conn.edit_case(case.id, ['sEvent'], ['A comment was posted by ' + au + ' in Pivotal Tracker at ' + tm + ':\n' + dt])
+
+											# Finally add a comment to the case to indicate that this is imported from Tracker
+											conn.edit_case(case.id, ['sEvent'], ['This case has been created by ' + author + ' from the following Pivotal Tracker story:\nhttps://www.pivotaltracker.com/story/show/%s' % ptid])
+
+											# And add a comment to the story to indicate that it has been imported into FogBugz
+											data = 'A FogBugz case has been created by ' + author + ' for this story:\n%s/default.asp?%s' % (obj.fburl, case.id)
+											data = '<note><text>%s</text></note>' % escape(data)
+
+											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data, method='POST', headers=headers, deadline=deadline)
 											if resp.status_code >= 300:
 												stat = '<span class="error">Error</span>'
 
@@ -513,7 +538,7 @@ class WebHookHandler(webapp.RequestHandler):
 									if note.nodeName == 'note':
 										data = note.getElementsByTagName('text')[0].firstChild.nodeValue
 										# Only propagate the note to FogBugz if it's not itself propagated from there
-										if re.match(r'[^\n]* in FogBugz(\n|$)|(Story created and imported into FogBugz|Case imported into Pivotal Tracker) by [^\n]*\.$', data) is None:
+										if re.match(r'[^\n]* in FogBugz(\n|$)|(A FogBugz case has been created by [^\n]* for this story|This story has been imported by [^\n]* from the following FogBugz case):\n', data) is None:
 											entry.notes.append(data)
 							except IndexError:
 								pass
@@ -569,14 +594,11 @@ class WebHookHandler(webapp.RequestHandler):
 							headers['Content-Type'] = 'application/xml'
 							first = True
 							for event in case.events:
-								if re.match(r'(Story created and imported into FogBugz|Case imported into Pivotal Tracker) by [^\n]*\.$', event.text):
-									data = event.text
-								else:
-									data = event.description + ' in FogBugz'
-									if event.changes:
-										data += '\n' + event.changes
-									if event.text and not first:
-										data += '\n' + event.text
+								data = event.description + ' in FogBugz'
+								if event.changes:
+									data += '\n' + event.changes
+								if event.text and not first:
+									data += '\n' + event.text
 								data = '<note><text>%s</text></note>' % escape(data)
 
 								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data, method='POST', headers=headers, deadline=deadline)
@@ -588,8 +610,16 @@ class WebHookHandler(webapp.RequestHandler):
 							# Finally, add a tag in this FogBugz case to link to the story in Tracker
 							case.tags.insert(0, 'ts@%s-%s' % (proj_id, entry.ptid))
 							fields = ['tags', 'sEvent']
-							values = [','.join(case.tags), 'Case imported into Pivotal Tracker by ' + author + '.']
+							values = [','.join(case.tags), 'A Pivotal Tracker story has been created by ' + author + ' for this case:\nhttps://www.pivotaltracker.com/story/show/%s' % entry.ptid]
 							conn.edit_case(entry.fbid, fields, values)
+
+							# And add a comment to the Tracker story to indicate that it's imported from FogBugz
+							data = 'This story has been imported by ' + author + ' from the following FogBugz case:\n%s/default.asp?%s' % (obj.fburl, case.id)
+							data = '<note><text>%s</text></note>' % escape(data)
+
+							resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data, method='POST', headers=headers, deadline=deadline)
+							if resp.status_code >= 300:
+								stat = '<span class="error">Error</span>'
 
 						except (FogBugzClientError, FogBugzServerError):
 							stat = '<span class="error">Error</span>'
@@ -610,9 +640,9 @@ class WebHookHandler(webapp.RequestHandler):
 							# A new comment has just been created, add it to FogBugz as a case event
 							try:
 								if case is None:
-									case = conn.edit_case(entry.fbid, ['sEvent'], ['Comment posted by ' + author + ' in Pivotal Tracker:\n\n' + note], 'ixBug,tags,ixCategory,sCategory,sTitle')[0]
+									case = conn.edit_case(entry.fbid, ['sEvent'], ['A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note], 'ixBug,tags,ixCategory,sCategory,sTitle')[0]
 								else:
-									conn.edit_case(entry.fbid, ['sEvent'], ['Comment posted by ' + author + ' in Pivotal Tracker:\n\n' + note])
+									conn.edit_case(entry.fbid, ['sEvent'], ['A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note])
 							except (FogBugzClientError, FogBugzServerError):
 								stat = '<span class="error">Error</span>'
 
@@ -746,16 +776,16 @@ class WebHookHandler(webapp.RequestHandler):
 							stat = '<span class="error">Error</span>'
 
 						if entry.state is not None and cmd == 'edit':
-							evtText.append('\tState changed to "%s".' % entry.state)
+							evtText.append('\tState changed to %s.' % entry.state)
 
 						if entry.estimate is not None:
-							evtText.append('\tEstimate changed to "%s".' % entry.estimate)
+							evtText.append('\tEstimate changed to %s.' % entry.estimate)
 
 						if entry.owner is not None:
-							evtText.append('\tOwner changed to "%s".' % entry.owner)
+							evtText.append('\tOwner changed to %s.' % entry.owner)
 
 						if entry.requester is not None:
-							evtText.append('\tRequester changed to "%s".' % entry.requester)
+							evtText.append('\tRequester changed to %s.' % entry.requester)
 
 						if fields or cmd != 'edit' or evtText:
 							if type != 'story_delete':
@@ -842,7 +872,9 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 								# If this event was created as a result of propagating changes/notes from Tracker to FogBugz,
 								# we obviously shouldn't propagate these changes back.
-								if re.search(r'^By [^\n]* in Pivotal Tracker\.|^Comment posted by [^\n]* in Pivotal Tracker:\n', event.text, re.MULTILINE):
+								if re.search(r'^By [^\n]* in Pivotal Tracker\.$', event.text, re.MULTILINE):
+									break
+								elif re.match(r'(A comment (was|has been) posted by [^\n]* in Pivotal Tracker( at [^\n]*)?|(This case|A Pivotal Tracker story) has been created by [^\n]* (from the following Pivotal Tracker story|for this case)):\n', event.text):
 									break
 
 								# See what changes have been made
@@ -936,14 +968,11 @@ class URLTriggerHandler(webapp.RequestHandler):
 										stat = '<span class="error">Error</span>'
 
 								# Finally add a comment in Tracker to reflect this case event
-								if re.match(r'(Story created and imported into FogBugz|Case imported into Pivotal Tracker) by [^\n]*\.$', event.text):
-									data = event.text
-								else:
-									data = event.description + ' in FogBugz'
-									if event.changes:
-										data += '\n' + event.changes
-									if event.text:
-										data += '\n' + event.text
+								data = event.description + ' in FogBugz'
+								if event.changes:
+									data += '\n' + event.changes
+								if event.text:
+									data += '\n' + event.text
 								data = '<note><text>%s</text></note>' % escape(data)
 								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data, method='POST', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
