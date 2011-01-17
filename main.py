@@ -313,7 +313,8 @@ class Story(object):
 		# This change is propagated to FogBugz if enabled in options, otherwise it's notified in FogBugz
 		self.labels = None
 
-		# These changed are notified in FogBugz
+		# These changes are notified in FogBugz
+		self.description = None
 		self.estimate = None
 		self.owner = None
 		self.requester = None
@@ -542,6 +543,10 @@ class WebHookHandler(webapp.RequestHandler):
 							except IndexError:
 								pass
 							if entry.notes:
+								changed = True
+
+							if story.getElementsByTagName('description'):
+								entry.description = True
 								changed = True
 
 							try:
@@ -797,6 +802,9 @@ class WebHookHandler(webapp.RequestHandler):
 
 						if entry.requester is not None:
 							evtText.append('\tRequester changed to %s.' % entry.requester)
+
+						if entry.description is not None:
+							evtText.append('\tStory description is changed.')
 
 						if fields or cmd != 'edit' or evtText:
 							if type != 'story_delete':
