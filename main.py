@@ -378,11 +378,10 @@ class WebHookHandler(webapp.RequestHandler):
 								if labels:
 									labels = labels[0].firstChild.nodeValue.split(',')
 									proj = None
-									for i in range(len(labels)):
+									for i in range(len(labels)-1, -1, -1):
 										if labels[i][:3] == 'fb:':
 											proj = labels[i][3:]
 											del labels[i]
-											break
 
 									if proj:
 										# We should propagate the story to FogBugz
@@ -685,8 +684,20 @@ class WebHookHandler(webapp.RequestHandler):
 								for i in range(len(case.tags)-1, -1, -1):
 									if case.tags[i][:3] == 'ts@':
 										del case.tags[i]
+									else:
+										case.tags[i] = case.tags[i].lower()
+								case.tags.sort()
 
-								if entry.labels != ','.join(case.tags):
+								labels = entry.labels.split(',')
+								modified = False
+								for i in range(len(labels)-1, -1, -1):
+									if labels[i][:3] == 'fb:':
+										del labels[i]
+										modified = True
+								if modified:
+									entry.labels = ','.join(labels)
+
+								if entry.labels.lower() != ','.join(case.tags):
 									if obj.tagsync:
 										fields.append('sTags')
 										if entry.labels:
