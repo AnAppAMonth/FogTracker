@@ -111,5 +111,10 @@ span.ok {color:#ADD335;}
 span.error {color:#FF3366;}
 form.delete {height:10px;}
 
+div.parag {margin-top:15px;}
+div.code {background:#EEEEEE;font-style:italic;margin:10px 40px 10px 40px;padding-left:10px;}
+span.code {background:#EEEEEE;font-style:italic;}
+span.symbol {color:#2BB0D7;font-style:italic;}
+
 div.footer {position:relative; text-align:center; margin-top:-15px;}
 div.poweredby {position:absolute; left:792px;}

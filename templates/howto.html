@@ -1,36 +1,60 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>How to use FogTracker</h2>
-  <p>
+	<h2>How to Setup FogTracker</h2>
 	<ol>
-	  <li>
-		Sign in to the application using your Google account, and create an integration profile with relevant information, including the URL of
-		your FogBugz server (both standalone and hosted options are supported), authentication info used to access FogBugz and Tracker, and other
-		options to customize the integration.
-	  </li>
-	  <li>
-		After an integration profile is created, a token is returned to uniquely identify this profile. A list of existing tokens are always available
-		once you login to the service, and you can click on any token to modify settings of that profile.
-	  </li>
-	  <li>
-		Go to your FogBugz account, install the <a href="http://www.fogcreek.com/FogBugz/plugins/plugin.aspx?ixPlugin=5">URLTrigger plugin</a>, and
-		create a new trigger that acts on <em>exactly</em> these five events: <span class="code">CaseResolved, CaseClosed, CaseReactivated, CaseReopened
-		and CaseEdited</span>. In the <em>URL</em> field fill in the following URL: <span class="code">http://&lt;appid&gt;.appspot.com/&lt;token&gt;/URLTrigger/?CaseNumber={CaseNumber}&CaseEventID={CaseEventID}</span>.
-		Here <em>&lt;appid&gt;</em> is the id of your AppEngine application, for this service use <em>fogtracker</em>; <em>&lt;token&gt;</em> is the token
-		returned in the last step.
-	  </li>
-	  <li>
-		Go to your Tracker account, enter <em>Project Settings</em>, click the <em>Integrations</em> tab. In the <em>Activity Web Hook</em> section, enter
-		the following URL as <em>Web Hook URL</em>: <span class="code">http://&lt;appid&gt;.appspot.com/&lt;token&gt;/WebHook/</span>.
-		Then, in the <em>External Tool Integrations</em> section, create a new integration of type <em>Other</em>. Choose any name you like for the
-		integration, leave blank for the username and password. In the <em>Base URL</em> field use that of your FogBugz installation: <span class="code">
-		https://&lt;your_fogbugz_host&gt;/default.asp?</span>, the ticket number will be appended by Tracker to form the full url. Finally, in the
-		<em>Import API URL</em> field, enter the following URL: <span class="code">http:/&lt;appid&gt;.appspot.com/&lt;token&gt;/CaseFeed/?q=&lt;query&gt;</span>
-		Here <em>&lt;query&gt;</em> is the search string used to specify which FogBugz cases you want to include in the feed. Documentation on the syntax
-		of the FogBugz search can be found <a href="http://fogbugz.stackexchange.com/questions/4399">here</a>. You probably want to at least specify a project
-		using <em>project:"proj_name"</em>. Note that the system always retrieves only active cases that are not already imported into Tracker, and you
-		don't have to specify these metrics in the query. You can create multiple integrations to put different kinds of FogBugz cases into different panels.
-	  </li>
+		<li>
+			<div class="parag">
+				Sign in to the application using your Google account, and create an integration profile with relevant information,
+				including the URL of your FogBugz server (both standalone and hosted options are supported), authentication info
+				used to access FogBugz and Tracker, and other options to customize the integration.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				After an integration profile is created, a <span class="symbol">token</span> is returned to uniquely identify this
+				profile. A list of existing tokens is always available once you sign in to the service, and you can click on any
+				token to modify settings of that profile.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				Go to your Tracker account, enter <em>Project Settings</em>, click the <em>Integrations</em>
+				tab. In the <em>Activity Web Hook</em> section, enter the following URL as <em>Web Hook URL</em>:
+				<div class="code">http://<span class="symbol">appid</span>.appspot.com/<span class="symbol">token</span>/WebHook/</div>
+				Here <span class="symbol">appid</span> is the id of your AppEngine application, for this service use <em>fogtracker</em>.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				In the <em>External Tool Integrations</em> section, create a new integration of type
+				<em>Other</em>. Choose any name you like for the integration, leave blank for the username and password. In the
+				<em>Base URL</em> field use that of your FogBugz installation:
+				<div class="code">https://<span class="symbol">your_fogbugz_host</span>/default.asp?</div>
+				The ticket number will be appended by Tracker to form the full url.
+			</div>
+			<div class="parag">
+				Finally, in the <em>Import API URL</em> field, enter the following URL:
+				<div class="code">http:/<span class="symbol">appid</span>.appspot.com/<span class="symbol">token</span>/CaseFeed/?q=<span class="symbol">query</span></div>
+				Here <span class="symbol">query</span> is the search string used to specify which FogBugz cases you want to include
+				in the feed. Documentation on the syntax of the FogBugz search can be found <a href="http://fogbugz.stackexchange.com/questions/4399">here</a>.
+				You probably want to at least specify a project using <em>project:"proj_name"</em>. Note that the system always
+				retrieves only active cases that are not already imported into Tracker, and you don't have to specify these metrics
+				in the query. You can create multiple integrations in Tracker using diffrent <span class="symbol">query</span> strings
+				to put different kinds of FogBugz cases into different panels.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				Go to your FogBugz account, install the <a href="http://www.fogcreek.com/FogBugz/plugins/plugin.aspx?ixPlugin=5">
+				URLTrigger plugin</a>, and create a new trigger that acts on <em>exactly</em> these five events:
+				<div class="code">CaseResolved, CaseClosed, CaseReactivated, CaseReopened and CaseEdited</div>
+				In the <em>URL</em> field fill in the following URL:
+				<div class="code">http://<span class="symbol">appid</span>.appspot.com/<span class="symbol">token</span>/URLTrigger/?CaseNumber={CaseNumber}&CaseEventID={CaseEventID}&EventType={EventType}</div>
+				Make sure the default <em>GET</em> method is used, and don't forget to set the <em>Filter</em> field to only include
+				cases belonging to this integration. However, if you have enabled the option to synchronize certain new Tracker stories
+				to FogBugz, make sure you also include these cases in the filter, so that changes to them can be propagated back into
+				Tracker.
+			</div>
+		</li>
 	</ol>
-  </p>
 {% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Notes & Limitations</h2>
+	<ol>
+		<li>
+			<div class="parag">
+				FogTracker relies on the <a href="http://www.fogcreek.com/FogBugz/plugins/plugin.aspx?ixPlugin=5">URLTrigger
+				plugin</a> to get notifications when changes are made in FogBugz, and therefore will not work if you don't
+				have this plugin installed.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				A special tag <span class="code">ts@<span class="symbol">pid</span>-<span class="symbol">sid</span></span> is
+				necessary for each FogBugz case that's linked to a Pivotal Tracker story. FogTracker relies on this tag to
+				know that this is a linked case, and which Pivotal Tracker story it's linked to. You must not create, modify
+				or remove this tag manually, and your own tags must not start with <span class="code">ts@</span>.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				On the other hand, the special label <span class="code">fb:<span class="symbol">proj</span></span> is used to
+				mark out Pivotal Tracker stories that should be propagated to FogBugz, and is reserved by FogTracker. Your own
+				labels must not start with <span class="code">fb:</span>, even if you choose not to propagate Pivotal Tracker
+				stories with this label to FogBugz in the integration profile.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				When a change is propagated from one system to the other, the author of the propageted change is the user used
+				by FogTracker, not the author of the original change, as neither API allows faking as another user while making
+				a change. Therefore, a separate user is suggested to be used in FogTracker for both systems, to avoid confusion.
+				That said, attempts are made to at least indicate the original author of each propagated change, by droping a line
+				in the Pivotal Tracker note or FogBugz case event for that change.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				Each user must use identical names in both systems, as FogTracker assumes this way. When a FogBugz case is imported
+				into Pivotal Tracker, its assignee becomes the requester of the new Pivotal Tracker story, and if that name doesn't
+				exist in Pivotal Tracker, an error would occur. This is not truely a limitation, as you should do it anyway to
+				avoid confusion.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				Updates to the story description in Pivotal Tracker is reported in the corresponding FogBugz case as an event,
+				but the new description is not propagated to the case, becaues AFAIK it's currently impossible to edit an exising
+				case event in FogBugz via API. On the other hand, notes in Pivotal Tracker are immutable, and therefore changes
+				to existing FogBugz case events (via the <em>Case Event Edit</em> plugin) are reported but not reflected in the
+				corresponding Pivotal Tracker story.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				FogTracker only supports one-to-one relationships between FogBugz cases and Tracker stories: each FogBugz case
+				can only link to one Tracker story, and vice versa.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				An integration profile is used to link Pivotal Tracker with a certain FogBugz installation. It knows/cares
+				nothing about the projects in them, and therefore are not limited to projects. You can however use multiple
+				integration profiles that point to the same FogBugz installation but have different settings in other options.
+				Other than setting different options however, there is no point in using more than one profile.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				If you use multiple <em>URLTrigger</em> entries in a single FogBugz installation (in order to use different
+				integration profiles), you must set the <em>Filter</em> fields to make sure that no case event could trigger
+				more than one <em>URLTrigger</em> entry. Otherwise the case event will be imported multiple times into
+				Pivotal Tracker.
+			</div>
+		</li>
+	</ol>
+{% endblock %}

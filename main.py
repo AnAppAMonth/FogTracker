@@ -1019,7 +1019,7 @@ def main():
 	# every second (an AppEngine limit). If you find yourself having an edge case where these limitations are significant,
 	# and if you believe all your requests can be processed within 30 seconds, you can add a "go" to the Tracker web hook
 	# and FogBugz URLTrigger URLs you use to tell FogTracker to process the request directly in the request handler.
-	application = webapp.WSGIApplication([(r'/(features|limitations|howto|new|edit|delete)?', MainPage),
+	application = webapp.WSGIApplication([(r'/(features|notes|howto|new|edit|delete)?', MainPage),
 											(r'/(.+)/CaseFeed/', CaseFeedHandler),
 											(r'/(.+)/WebHook/(go)?', WebHookHandler),
 											(r'/(.+)/URLTrigger/(go)?', URLTriggerHandler),
