@@ -3,15 +3,15 @@ integrate FogBugz and Pivotal Tracker. It's written in Python and for Google App
 
 Key Features
 1. Two-way integration. A user can import a FogBugz case into Pivotal Tracker via
-   Drag & Drop, or import a new or existing Pivotal Tracker story into FogBugz by
-   assigning a special label to it. After the initial import, the FogBugz case and
-   the Pivotal Tracker story are linked to each other, and any further change or
-   comment on either side will be propagated to or reported in the other side.
+  Drag & Drop, or import a new or existing Pivotal Tracker story into FogBugz by
+  assigning a special label to it. After the initial import, the FogBugz case and
+  the Pivotal Tracker story are linked to each other, and any further change or
+  comment on either side will be propagated to or reported in the other side.
 
 2. You can link multiple FogBugz projects to one Pivotal Tracker project, multiple
-   Pivotal Tracker projects to one FogBugz project, or multiple FogBugz projects to
-   multiple Pivotal Tracker projects. However, each FogBugz case can only be linked
-   with a single Pivotal Tracker story, and vice versa.
+  Pivotal Tracker projects to one FogBugz project, or multiple FogBugz projects to
+  multiple Pivotal Tracker projects. However, each FogBugz case can only be linked
+  with a single Pivotal Tracker story, and vice versa.
 
 3. FogTracker works with both FogBugz On Demand and your private FogBugz server.
 
