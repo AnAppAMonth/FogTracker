@@ -46,7 +46,9 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							Enter the user email used by the integration to access FogBugz. It's recommended that you use a separate user specifically for this purpose.
+							Enter the email of the user account used by the integration to access FogBugz. It's recommended
+							that you use a separate user specifically for this purpose, and you must make sure this user has
+							admin privileges on the FogBugz projects relevant to this integration.
 						</span>
 					</a>
 				</td>
@@ -56,7 +58,7 @@
 			<tr>
 				<td></td>
 				<td colspan="2" class="error">
-					<em>* You must specify the password of the FogBugz user used.</em>
+					<em>* You must specify the password of the given FogBugz user.</em>
 				</td>
 			</tr>
 			{% endif %}
@@ -81,7 +83,7 @@
 			<tr>
 				<td></td>
 				<td colspan="2" class="error">
-					<em>* You must specify the API token of a Tracker user for use to access the stories.</em>
+					<em>* You must specify the API token of a Pivotal Tracker user for use to access the stories.</em>
 				</td>
 			</tr>
 			{% endif %}
@@ -93,8 +95,10 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							Enter the API token of the user account used to access Pivotal Tracker. You can create a new token by selecting
-							<em>Profile -> API Token -> Create New Token</em>. It's recommended that you use a separate user specifically for this purpose.
+							Enter the API token of the user account used to access Pivotal Tracker. You can create a new
+							token by selecting <em>Profile -> API Token -> Create New Token</em>. It's recommended that
+							you use a separate user specifically for this purpose, and you must make sure this user has
+							admin privileges on the Pivotal Tracker projects relevant to this integration.
 						</span>
 					</a>
 				</td>
@@ -108,7 +112,7 @@
 				<td>
 					<table border="0" cellspacing="0" cellpadding="0"><tr>
 						<td valign="top"><input class="cb" type="checkbox" name="tagsync" value="on"{% if tagsync %} checked="true"{% endif %} /></td>
-						<td>Synchronize tags and labels in linked FogBugz cases<br/> and Tracker stories</td>
+						<td>Synchronize tags and labels in linked FogBugz cases and<br/> Pivotal Tracker stories</td>
 					</tr></table>
 				</td>
 				<td class="htd" valign="top">
@@ -116,13 +120,13 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							<p>If checked, labels in each imported Tracker story are synchronized with the tags in its
-							corresponding FogBugz case.</p>
+							<p>If checked, labels in each imported Pivotal Tracker story are synchronized with the tags
+							in its corresponding FogBugz case.</p>
 							<p class="bold">It's <em>highly recommended</em> that you enable this option at the beginning
 							of an integration if needed. If this option is enabled for an old integration, tags and labels
 							in those already linked cases and stories are not synchronized automatically. The first time
-							the tags of a FogBugz case or the labels of a Tracker story are modified, they are synchronized
-							to the other side of the integration, overwriting all existing labels or tags there.</p>
+							the tags of a FogBugz case or the labels of a Pivotal Tracker story are modified, they are
+							synchronized to the other side of the integration, overwriting all existing labels or tags there.</p>
 						</span>
 					</a>
 				</td>
@@ -132,7 +136,7 @@
 				<td>
 					<table border="0" cellspacing="0" cellpadding="0"><tr>
 						<td valign="top"><input class="cb" type="checkbox" name="ptprop" value="on"{% if ptprop %} checked="true"{% endif %} /></td>
-						<td>Propagate new Tracker stories with <em>a certain label</em><br/> to FogBugz</td>
+						<td>Propagate Pivotal Tracker stories with <em>a special label</em><br/> to FogBugz</td>
 					</tr></table>
 				</td>
 				<td class="htd" valign="top">
@@ -140,10 +144,10 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							If checked, for each new Tracker story with a label of the form <em>fb:&lt;proj&gt;</em>, if
-							it doesn't already have a corresponding case in FogBugz, such a case will be created under
-							the project &lt;proj&gt;, and the Tracker story will be linked to the new FogBugz case. The
-							special label itself won't be added to the new case (as a tag, even if the synchronization
+							If checked, for each Pivotal Tracker story with a special label of the form <em>fb:&lt;proj&gt;</em>,
+							if it doesn't already have a corresponding case in FogBugz, such a case will be created under
+							the project &lt;proj&gt;, and the Pivotal Tracker story will be linked to the new FogBugz case.
+							The special label itself won't be added to the new case (as a tag, even if the synchronization
 							option above is checked), and can later be removed without any effects. In fact, if the
 							synchronization option above is checked, the special label will be removed automatically
 							after the tags and labels are synchronized for the first time.
@@ -157,9 +161,9 @@
 				<td></td>
 				<td colspan="2" class="error">
 					<em>
-						* You must specify the integration ID in Tracker if you choose to propagate certain new Tracker<br/>
-						stories to FogBugz. This ID is needed to link the Tracker story in question to the new FogBugz<br/>
-						case created.
+						* You must specify the integration ID in Pivotal Tracker if you choose to propagate<br/>
+						certain Pivotal Tracker stories to FogBugz. This ID is needed to link the story in<br/>
+						question to the new FogBugz case created.
 					</em>
 				</td>
 			</tr>
@@ -172,15 +176,15 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							<p>This ID is only needed if you have checked the above option to propagate certain new Tracker
-							stories to FogBugz. Leave it empty otherwise.</p>
-							<p>To get the integration ID in Tracker, follow step 4 in the how-to page to create a new
-							integration of type <em>Other</em>. Fill in anything in the <em>Base URL</em> field and click
-							<em>Save</em>. You will now see this newly created integration in the <em>External Tool
+							<p>This ID is only needed if you have checked the above option to propagate certain Pivotal
+							Tracker stories to FogBugz. Leave it empty otherwise.</p>
+							<p>To get the integration ID in Pivotal Tracker, follow step 4 in the how-to page to create
+							a new integration of type <em>Other</em>. Fill in anything in the <em>Base URL</em> field and
+							click <em>Save</em>. You will now see this newly created integration in the <em>External Tool
 							Integrations</em> section. Hover your mouse over the <em>Edit</em> link to see the URL, the
 							last number in it (right before "/edit") is the integration ID.</p>
-							<p>Later you will have to edit this integration in Tracker to fill in necessary information,
-							as detailed in step 4 of the how-to page.</p>
+							<p>Later you will have to edit this integration in Pivotal Tracker to fill in necessary
+							information, as detailed in step 4 of the how-to page.</p>
 						</span>
 					</a>
 				</td>
@@ -197,8 +201,8 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							Specify the mappings between FogBugz categories and Tracker story types. By default the
-							following mappings are used:<br/>
+							Specify the mappings between FogBugz categories and Pivotal Tracker story types. By default
+							the following mappings are used:<br/>
 							<p><em>
 								Bug = Bug<br/>
 								Feature = Feature<br/>
@@ -208,8 +212,8 @@
 								* = Chore
 							</em></p>
 							These mappings are evaluated from top to bottom, and the first match will be used. For example,
-							The corresponding FogBugz category of the Tracker type "Chore" is "Chore", not "Inquiry". Your
-							specified mappings are evaluated before the default ones, also from top to bottom.
+							The corresponding FogBugz category of the Pivotal Tracker type "Chore" is "Chore", not "Inquiry".
+							Your specified mappings are evaluated before the default ones, also from top to bottom.
 						</span>
 					</a>
 				</td>
@@ -227,9 +231,9 @@
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
 							Specify the status a FogBugz case under each category should be resolved to when its counterpart
-							in Tracker is finished. Each line should contain the resolve status of one category, in the
-							form <em>Category:Status_ID</em> (e.g. <em>Bug:2</em>). If not specified the default resolve
-							status is used.
+							in Pivotal Tracker is finished. Each line should contain the resolve status of one category,
+							in the form <em>&lt;category_name&gt;:&lt;status_id&gt;</em> (e.g. <em>Bug:2</em>). If not specified
+							the default resolve status is used.
 						</span>
 					</a>
 				</td>

@@ -29,9 +29,10 @@
 			<div class="parag">
 				When a change is propagated from one system to the other, the author of the propageted change is the user used
 				by FogTracker, not the author of the original change, as neither API allows faking as another user while making
-				a change. Therefore, a separate user is suggested to be used in FogTracker for both systems, to avoid confusion.
-				That said, attempts are made to at least indicate the original author of each propagated change, by droping a line
-				in the Pivotal Tracker note or FogBugz case event for that change.
+				a change. Therefore, a separate user is suggested to be used in FogTracker for both systems, to avoid confusion
+				(you also must give the user <em>admin privileges</em> in both systems so that it can make all the changes as
+				supposed to). That said, attempts are made to at least indicate the original author of each propagated change,
+				by droping a line in the Pivotal Tracker note or FogBugz case event for that change.
 			</div>
 		</li>
 		<li>
@@ -53,8 +54,8 @@
 		</li>
 		<li>
 			<div class="parag">
-				FogTracker only supports one-to-one relationships between FogBugz cases and Tracker stories: each FogBugz case
-				can only link to one Tracker story, and vice versa.
+				FogTracker only supports one-to-one relationships between FogBugz cases and Pivotal Tracker stories: each
+				FogBugz case can only link to one Pivotal Tracker story, and vice versa.
 			</div>
 		</li>
 		<li>

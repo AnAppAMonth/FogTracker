@@ -1,7 +1,7 @@
 FogTracker is a Free and Open Source Software web application and a free service to
 integrate FogBugz and Pivotal Tracker. It's written in Python and for Google AppEngine.
 
-Key Features
+Key Features:
 1. Two-way integration. A user can import a FogBugz case into Pivotal Tracker via
   Drag & Drop, or import a new or existing Pivotal Tracker story into FogBugz by
   assigning a special label to it. After the initial import, the FogBugz case and
