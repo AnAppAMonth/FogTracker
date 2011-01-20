@@ -990,8 +990,10 @@ class URLTriggerHandler(webapp.RequestHandler):
 								mo = re.search(r'(?:^|\.\s+)Revised.*?from\s([\d/]+)\sat\s([\d:]+)\sUTC', event.changes, re.MULTILINE)
 								if mo:
 									# A comment is changed in this event
-									d = 'T'.join(mo.groups()).replace('/', '-')
-									if case.events[0].date.find(d) == 0:
+									d = mo.group(1).split('/')
+									t = mo.group(2).split(':')
+									s = '%s-%02d-%02dT%02d:%02d' % (d[0], int(d[1]), int(d[2]), int(t[0]), int(t[1]))
+									if case.events[0].date.find(s) == 0:
 										# The first comment is changed
 										pe = True
 
