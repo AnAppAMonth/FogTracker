@@ -410,7 +410,7 @@ class WebHookHandler(webapp.RequestHandler):
 												headers['X-TrackerToken'] = obj.pttoken
 												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
 												if resp.status_code >= 300:
-													logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+													logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
 													stat = '<span class="error">Error</span>'
 												else:
 													try:
@@ -491,7 +491,7 @@ class WebHookHandler(webapp.RequestHandler):
 											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id></story>' % (case.id, obj.ptintid)
 											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), payload=data, method='PUT', headers=headers, deadline=deadline)
 											if resp.status_code >= 300:
-												logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data))
 												stat = '<span class="error">Error</span>'
 
 											# Create a case event for each note/comment in the Tracker story
@@ -520,8 +520,8 @@ class WebHookHandler(webapp.RequestHandler):
 
 											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 											if resp.status_code >= 300:
-												logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
-												stat = '<span class="error">Error</span>'
+												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+											stat = '<span class="error">Error</span>'
 
 										except (FogBugzClientError, FogBugzServerError), e:
 											logging.exception(str(e))
@@ -644,7 +644,7 @@ class WebHookHandler(webapp.RequestHandler):
 								data = '<story><labels>%s</labels></story>' % escape(','.join(case.tags))
 								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 									stat = '<span class="error">Error</span>'
 
 							# Third, add all existing events in this FogBugz case into Tracker as comments on this story
@@ -659,7 +659,7 @@ class WebHookHandler(webapp.RequestHandler):
 
 								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 									stat = '<span class="error">Error</span>'
 
 								first = False
@@ -676,7 +676,7 @@ class WebHookHandler(webapp.RequestHandler):
 
 							resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 							if resp.status_code >= 300:
-								logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+								logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 								stat = '<span class="error">Error</span>'
 
 						except (FogBugzClientError, FogBugzServerError), e:
@@ -1078,7 +1078,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 										resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
 
 									if resp.status_code >= 300:
-										logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, (data + '</story>').encode('utf8')))
 										stat = '<span class="error">Error</span>'
 
 								# Finally add a comment in Tracker to reflect this case event
@@ -1090,7 +1090,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 								data = '<note><text>%s</text></note>' % escape(data)
 								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 									stat = '<span class="error">Error</span>'
 
 								break
