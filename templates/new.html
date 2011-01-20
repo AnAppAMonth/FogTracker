@@ -46,9 +46,9 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							Enter the email of the user account used by the integration to access FogBugz. It's recommended
-							that you use a separate user specifically for this purpose, and you must make sure this user has
-							admin privileges on the FogBugz projects relevant to this integration.
+							Enter the email of the user account used by the integration to access FogBugz. You must make
+							sure this user has admin privileges on the FogBugz projects relevant to this integration, and
+							it's recommended that you use a separate user specifically for this purpose
 						</span>
 					</a>
 				</td>
@@ -96,9 +96,9 @@
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
 							Enter the API token of the user account used to access Pivotal Tracker. You can create a new
-							token by selecting <em>Profile -> API Token -> Create New Token</em>. It's recommended that
-							you use a separate user specifically for this purpose, and you must make sure this user has
-							admin privileges on the Pivotal Tracker projects relevant to this integration.
+							token by selecting <em>Profile -> API Token -> Create New Token</em>. You must make sure this
+							user has admin privileges on the Pivotal Tracker projects relevant to this integration, and
+							it's recommended that you use a separate user specifically for this purpose,
 						</span>
 					</a>
 				</td>
@@ -149,8 +149,9 @@
 							the project &lt;proj&gt;, and the Pivotal Tracker story will be linked to the new FogBugz case.
 							The special label itself won't be added to the new case (as a tag, even if the synchronization
 							option above is checked), and can later be removed without any effects. In fact, if the
-							synchronization option above is checked, the special label will be removed automatically
-							after the tags and labels are synchronized for the first time.
+							synchronization option above is checked, the special label will be removed automatically when
+							the tags in the new FogBugz case are modified and synchronized to the Pivotal Tracker story
+							for the first time.
 						</span>
 					</a>
 				</td>
@@ -178,13 +179,13 @@
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
 							<p>This ID is only needed if you have checked the above option to propagate certain Pivotal
 							Tracker stories to FogBugz. Leave it empty otherwise.</p>
-							<p>To get the integration ID in Pivotal Tracker, follow step 4 in the how-to page to create
-							a new integration of type <em>Other</em>. Fill in anything in the <em>Base URL</em> field and
-							click <em>Save</em>. You will now see this newly created integration in the <em>External Tool
-							Integrations</em> section. Hover your mouse over the <em>Edit</em> link to see the URL, the
-							last number in it (right before "/edit") is the integration ID.</p>
-							<p>Later you will have to edit this integration in Pivotal Tracker to fill in necessary
-							information, as detailed in step 4 of the how-to page.</p>
+							<p>To get the integration ID in Pivotal Tracker, follow Step 4 in the how-to page to create
+							a new integration of type <em>Other</em>, and fill out the form, but leave out the <em>Import
+							API URL</em> field for now. Click <em>Save</em> and you will see this newly created integration
+							in the <em>External Tool Integrations</em> section. Hover your mouse over the <em>Edit</em>
+							link to see the URL, and the last number in it (before "/edit") is the integration ID.</p>
+							<p>Later you must edit this integration in Pivotal Tracker and fill in the <em>Import API URL</em>
+							field, as instructed in Step 4 of the how-to page.</p>
 						</span>
 					</a>
 				</td>

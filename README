@@ -17,3 +17,7 @@ Key Features:
 
 You can find more information on FogTracker and even try it out on its website:
 http://fogtracker.appspot.com/
+
+The interfacing with FogBugz is based on pyfogbugz, a Python wrapper of the FogBugz
+API hosted on GitHub:
+https://github.com/paltman/pyfogbugz

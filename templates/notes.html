@@ -28,11 +28,11 @@
 		<li>
 			<div class="parag">
 				When a change is propagated from one system to the other, the author of the propageted change is the user used
-				by FogTracker, not the author of the original change, as neither API allows faking as another user while making
-				a change. Therefore, a separate user is suggested to be used in FogTracker for both systems, to avoid confusion
-				(you also must give the user <em>admin privileges</em> in both systems so that it can make all the changes as
-				supposed to). That said, attempts are made to at least indicate the original author of each propagated change,
-				by droping a line in the Pivotal Tracker note or FogBugz case event for that change.
+				by FogTracker, not the author of the original change, making it easy to distinguish propagated changes from
+				native ones. We suggest using a separate user in FogTracker for both systems (you also must give this user
+				<em>admin privileges</em> in both systems so that it can make all the changes as supposed to). That said,
+				attempts are made to at least indicate the original author of each propagated change, by droping a line in
+				the Pivotal Tracker note or FogBugz case event for that change.
 			</div>
 		</li>
 		<li>
@@ -50,6 +50,16 @@
 				case event in FogBugz via API. On the other hand, notes in Pivotal Tracker are immutable, and therefore changes
 				to existing FogBugz case events (via the <em>Case Event Edit</em> plugin) are reported but not reflected in the
 				corresponding Pivotal Tracker story.
+			</div>
+		</li>
+		<li>
+			<div class="parag">
+				A rule in Pivotal Tracker says that a story must be estimated before it can be changed to any state other
+				than <em>unstarted</em>. Therefore if such a state change needs to be made by FogTracker due to a status
+				change in the linked FogBugz case, FogTracker automatically sets the <em>estimate</em> of the story to <em>1</em>.
+				You can always change it afterwards if this is not what you want. Also note that when a Pivotal Tracker
+				story in the <em>Icebox</em> is changed to any state other than <em>unstarted</em>, it's also automatically
+				moved out of the <em>Icebox</em> and into the <em>Backlog</em>.
 			</div>
 		</li>
 		<li>

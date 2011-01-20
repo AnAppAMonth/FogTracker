@@ -25,6 +25,7 @@ Provides connectivity to FogBugz
 import sys
 import urllib
 import xml.sax
+import logging
 import BaseHTTPServer
 msg_dict = BaseHTTPServer.BaseHTTPRequestHandler.responses
 
@@ -55,6 +56,7 @@ class Connection(object):
 
 		try:
 			url = "%s/%s" % (self.url, path)
+			logging.info(url)
 			if self.offline:
 				response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=60)
 			else:
@@ -126,11 +128,12 @@ class FogBugzConnection(Connection):
 			self._logon()
 
 	def make_request(self, path, data=None):
-		computed_path = urllib.quote_plus(path)
 		if self.base_path:
-			computed_path = "%s%s" % (self.base_path, computed_path)
+			computed_path = "%s%s" % (self.base_path, path)
 			if self.token:
 				computed_path += "&token=%s" % self.token
+		else:
+			computed_path = path
 		return super(FogBugzConnection, self).make_request(computed_path, data)
 
 	def _check_api(self):
@@ -144,7 +147,7 @@ class FogBugzConnection(Connection):
 			raise FogBugzClientError("Could not validate API.")
 
 	def _logon(self):
-		response = self.make_request('cmd=logon&email=%s&password=%s' % (self.username, self.password))
+		response = self.make_request('cmd=logon&email=%s&password=%s' % (urllib.quote_plus(self.username), urllib.quote_plus(self.password)))
 		if response:
 			data = response.content
 			handler = LogonHandler()
@@ -174,11 +177,11 @@ class FogBugzConnection(Connection):
 	def list_cases(self, search=None, cols=None, max_records=None):
 		query = 'cmd=search'
 		if search:
-			query += '&q=%s' % search
+			query += '&q=%s' % urllib.quote_plus(search)
 		if cols:
-			query += '&cols=%s' % cols
+			query += '&cols=%s' % urllib.quote_plus(cols)
 		else:
-			query += '&cols=%s' % ','.join(AVAILABLE_CASE_COLUMNS)
+			query += '&cols=%s' % urllib.quote_plus(','.join(AVAILABLE_CASE_COLUMNS))
 		if max_records:
 			query += '&max=%s' % max_records
 		response = self.make_request(query)
@@ -207,9 +210,9 @@ class FogBugzConnection(Connection):
 			query = 'cmd=%s&ixBug=%s' % (cmd, id)
 
 		for i in range(len(fields)):
-			query += '&%s=%s' % (fields[i], values[i])
+			query += '&%s=%s' % (fields[i], urllib.quote_plus(values[i]))
 		if cols:
-			query += '&cols=' + cols
+			query += '&cols=' + urllib.quote_plus(cols)
 
 		response = self.make_request(query)
 		if response:

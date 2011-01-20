@@ -21,7 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-import re, random, time
+import re, random, time, logging
 from datetime import datetime
 from xml.sax.saxutils import escape
 from xml.dom import minidom
@@ -46,6 +46,7 @@ def add_task(queue, url, method, payload=None, params=None, countdown=0):
 			else:
 				taskqueue.add(queue_name=queue, url=url, method=method, countdown=countdown)
 		except taskqueue.TransientError:
+			logging.exception('TransientError in the Task Queue.')
 			countdown += 1
 			continue
 		else:
@@ -234,13 +235,14 @@ class CaseFeedHandler(webapp.RequestHandler):
 		output = '<?xml version="1.0" encoding="UTF-8"?>\n'
 		output += '<external_stories type="array">\n'
 
+		conn = None
 		try:
 			conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken)
 
 			# This is the query used to specify the cases to include in the feed
 			query = self.request.get('q')
 
-			cases = conn.list_cases(query + ' status:active -tag:"ts@*"', 'ixBug,ixBugParent,ixBugChildren,sTitle,sPersonAssignedTo,sCategory,dtOpened,tags,events', 500)
+			cases = conn.list_cases((query + ' status:active -tag:"ts@*"').encode('utf8'), 'ixBug,ixBugParent,ixBugChildren,sTitle,sPersonAssignedTo,sCategory,dtOpened,events', 500)
 
 			for case in cases:
 				output += ' <external_story>\n'
@@ -249,11 +251,11 @@ class CaseFeedHandler(webapp.RequestHandler):
 
 				summary = case.events[0].text
 				if case.parent_case > '0':
-					summary = 'Parent Case: %s/default.asp?%s\n\n' % (conn.url, case.parent_case) + summary
+					summary = 'Parent Case: %s/default.asp?%s\n\n' % (obj.fburl, case.parent_case) + summary
 				if case.child_cases:
 					summary += '\n\nChild Cases:'
 					for cc in case.child_cases.split(','):
-						summary += '\n%s/default.asp?' % conn.url + cc
+						summary += '\n%s/default.asp?' % obj.fburl + cc
 				output += '  <description>%s</description>\n' % escape(summary)
 
 				output += '  <requested_by>%s</requested_by>\n' % escape(case.assigned_to_name)
@@ -265,7 +267,7 @@ class CaseFeedHandler(webapp.RequestHandler):
 				stype = None
 				for ln in obj.mapping.splitlines():
 					t = ln.partition('=')
-					if t[0].strip().lower() == category:
+					if t[0].strip().lower() in (category, '*'):
 						stype = t[2].strip().lower()
 						break
 
@@ -279,23 +281,25 @@ class CaseFeedHandler(webapp.RequestHandler):
 
 				output += '  <story_type>%s</story_type>\n' % escape(stype)
 
-				if obj.tagsync:
-					output += '  <labels>%s</labels>\n' % escape(','.join(case.tags))
+#				if obj.tagsync and case.tags:
+#					output += '  <labels>%s</labels>\n' % escape(','.join(case.tags))
 
 				output += ' </external_story>\n'
-		except (FogBugzClientError, FogBugzServerError):
+		except (FogBugzClientError, FogBugzServerError), e:
+			logging.exception(str(e))
 			stat = '<span class="error">Error</span>'
 
 		output += '</external_stories>\n'
 
 		# If the token has been updated, also update it in the integration object
-		if obj.fbtoken != conn.token or obj.status != stat:
-			obj.fbtoken = conn.token
+		if (conn and obj.fbtoken != conn.token) or obj.status != stat:
+			if conn:
+				obj.fbtoken = conn.token
 			obj.status = stat
 			obj.put()
 
 		self.response.headers.add_header("Content-Type", 'text/xml')
-		self.response.out.write(output)
+		self.response.out.write(output.encode('utf8'))
 
 class Story(object):
 	def __init__(self, fbid):
@@ -394,54 +398,84 @@ class WebHookHandler(webapp.RequestHandler):
 											tags += ',' + ','.join(labels)
 
 										fields = ['sTags', 'sProject']
-										values = [tags, proj]
+										values = [tags.encode('utf8'), proj.encode('utf8')]
 
-										try:
-											title = story.getElementsByTagName('name')[0].firstChild.nodeValue
-										except IndexError:
-											pass
-										else:
-											fields.append('sTitle')
-											values.append(title)
-
-										try:
-											desc = story.getElementsByTagName('description')[0].firstChild.nodeValue
-										except IndexError:
-											pass
-										else:
-											fields.append('sEvent')
-											values.append(desc)
-
-										try:
-											stype = story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
-										except IndexError:
-											pass
-										else:
-											# Get the corresponding FogBugz category of the Tracker type stype
-											category = None
-											for ln in obj.mapping.splitlines():
-												t = ln.partition('=')
-												if t[2].strip().lower() == stype:
-													category = t[0].strip()
-													break
-
-											# stype is either 'bug', 'feature', 'chore' or 'release'
-											if category is None:
-												if stype == 'release':
-													category = 'Schedule Item'
+										# If this is a new story, no problem. But if the user just added the special tag
+										# to an existing story, some relevant info (e.g. title, desc) may not be included
+										# in the request body, in which case we have to fetch the story from Tracker.
+										fetch_story = False
+										while True:
+											if fetch_story:
+												headers = {}
+												headers['X-TrackerToken'] = obj.pttoken
+												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
+												if resp.status_code >= 300:
+													logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+													stat = '<span class="error">Error</span>'
 												else:
-													category = stype
+													try:
+														rdom = minidom.parseString(resp.content)
+														story = rdom.getElementsByTagName('story')[0]
+													except (ExpatError, IndexError), e:
+														logging.exception(str(e))
+														stat = '<span class="error">Error</span>'
 
-											fields.append('sCategory')
-											values.append(category)
+											try:
+												title = story.getElementsByTagName('name')[0].firstChild.nodeValue
+											except IndexError:
+												if not fetch_story:
+													fetch_story = True
+													continue
+											else:
+												fields.append('sTitle')
+												values.append(title.encode('utf8'))
 
-										try:
-											assigned_to = story.getElementsByTagName('requested_by')[0].firstChild.nodeValue
-										except IndexError:
-											pass
-										else:
-											fields.append('sPersonAssignedTo')
-											values.append(assigned_to)
+											try:
+												desc = story.getElementsByTagName('description')[0].firstChild.nodeValue
+											except IndexError:
+												if not fetch_story:
+													fetch_story = True
+													continue
+											else:
+												fields.append('sEvent')
+												values.append(desc.encode('utf8'))
+
+											try:
+												assigned_to = story.getElementsByTagName('requested_by')[0].firstChild.nodeValue
+											except IndexError:
+												if not fetch_story:
+													fetch_story = True
+													continue
+											else:
+												fields.append('sPersonAssignedTo')
+												values.append(assigned_to.encode('utf8'))
+
+											try:
+												stype = story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
+											except IndexError:
+												if not fetch_story:
+													fetch_story = True
+													continue
+											else:
+												# Get the corresponding FogBugz category of the Tracker type stype
+												category = None
+												for ln in obj.mapping.splitlines():
+													t = ln.partition('=')
+													if t[2].strip().lower() in (stype, '*'):
+														category = t[0].strip()
+														break
+
+												# stype is either 'bug', 'feature', 'chore' or 'release'
+												if category is None:
+													if stype == 'release':
+														category = 'Schedule Item'
+													else:
+														category = stype
+
+												fields.append('sCategory')
+												values.append(category.encode('utf8'))
+
+											break
 
 										# Now create the case
 										try:
@@ -457,13 +491,15 @@ class WebHookHandler(webapp.RequestHandler):
 											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id></story>' % (case.id, obj.ptintid)
 											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), payload=data, method='PUT', headers=headers, deadline=deadline)
 											if resp.status_code >= 300:
+												logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
 												stat = '<span class="error">Error</span>'
 
 											# Create a case event for each note/comment in the Tracker story
 											try:
 												rdom = minidom.parseString(resp.content)
 												story = rdom.getElementsByTagName('story')[0]
-											except (ExpatError, IndexError):
+											except (ExpatError, IndexError), e:
+												logging.exception(str(e))
 												stat = '<span class="error">Error</span>'
 											else:
 												notes = story.getElementsByTagName('notes')
@@ -473,20 +509,22 @@ class WebHookHandler(webapp.RequestHandler):
 															dt = note.getElementsByTagName('text')[0].firstChild.nodeValue
 															au = note.getElementsByTagName('author')[0].firstChild.nodeValue
 															tm = note.getElementsByTagName('noted_at')[0].firstChild.nodeValue
-															conn.edit_case(case.id, ['sEvent'], ['A comment was posted by ' + au + ' in Pivotal Tracker at ' + tm + ':\n' + dt])
+															conn.edit_case(case.id, ['sEvent'], [('A comment was posted by ' + au + ' in Pivotal Tracker at ' + tm + ':\n' + dt).encode('utf8')])
 
 											# Finally add a comment to the case to indicate that this is imported from Tracker
-											conn.edit_case(case.id, ['sEvent'], ['This case has been created by ' + author + ' from the following Pivotal Tracker story:\nhttps://www.pivotaltracker.com/story/show/%s' % ptid])
+											conn.edit_case(case.id, ['sEvent'], [('This case has been created by ' + author + ' from the following Pivotal Tracker story:\nhttps://www.pivotaltracker.com/story/show/%s' % ptid).encode('utf8')])
 
 											# And add a comment to the story to indicate that it has been imported into FogBugz
 											data = 'A FogBugz case has been created by ' + author + ' for this story:\n%s/default.asp?%s' % (obj.fburl, case.id)
 											data = '<note><text>%s</text></note>' % escape(data)
 
-											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data, method='POST', headers=headers, deadline=deadline)
+											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 											if resp.status_code >= 300:
+												logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
 												stat = '<span class="error">Error</span>'
 
-										except (FogBugzClientError, FogBugzServerError):
+										except (FogBugzClientError, FogBugzServerError), e:
+											logging.exception(str(e))
 											stat = '<span class="error">Error</span>'
 
 							continue
@@ -538,7 +576,7 @@ class WebHookHandler(webapp.RequestHandler):
 									if note.nodeName == 'note':
 										data = note.getElementsByTagName('text')[0].firstChild.nodeValue
 										# Only propagate the note to FogBugz if it's not itself propagated from there
-										if re.match(r'[^\n]* in FogBugz(\n|$)|(A FogBugz case has been created by [^\n]* for this story|This story has been imported by [^\n]* from the following FogBugz case):\n', data) is None:
+										if re.match(r'[^\n]* in FogBugz at [\d\-:\s]* UTC(\n|$)|(A FogBugz case has been created by [^\n]* for this story|This story has been imported by [^\n]* from the following FogBugz case):\n', data) is None:
 											entry.notes.append(data)
 							except IndexError:
 								pass
@@ -583,7 +621,13 @@ class WebHookHandler(webapp.RequestHandler):
 			if entries:
 				# At least one of the listed stories is an import from FogBugz, and more operations are needed
 				if conn is None:
-					conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
+					try:
+						conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
+					except (FogBugzClientError, FogBugzServerError), e:
+						logging.exception(str(e))
+						obj.status = '<span class="error">Error</span>'
+						obj.put()
+						return self.response.out.write('OK')
 
 				for entry in entries:
 					if type == 'story_create':
@@ -592,40 +636,51 @@ class WebHookHandler(webapp.RequestHandler):
 							# First, get all tags and a list of all existing events of the FogBugz case
 							case = conn.list_cases(entry.fbid, 'ixBug,tags,events')[0]
 
-							# Second, add all existing events in this FogBugz case into Tracker as comments on this story
+							# Second, if tagsync is checked, propagate the tags to the new Tracker story
 							headers = {}
 							headers['X-TrackerToken'] = obj.pttoken
 							headers['Content-Type'] = 'application/xml'
+							if obj.tagsync and case.tags:
+								data = '<story><labels>%s</labels></story>' % escape(','.join(case.tags))
+								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+								if resp.status_code >= 300:
+									logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
+									stat = '<span class="error">Error</span>'
+
+							# Third, add all existing events in this FogBugz case into Tracker as comments on this story
 							first = True
 							for event in case.events:
-								data = event.description + ' in FogBugz'
+								data = event.description + ' in FogBugz at ' + event.date.replace('T', ' ')[:-4] + ' UTC'
 								if event.changes:
 									data += '\n' + event.changes
 								if event.text and not first:
 									data += '\n' + event.text
 								data = '<note><text>%s</text></note>' % escape(data)
 
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data, method='POST', headers=headers, deadline=deadline)
+								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
+									logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
 									stat = '<span class="error">Error</span>'
 
 								first = False
 
 							# Finally, add a tag in this FogBugz case to link to the story in Tracker
 							case.tags.insert(0, 'ts@%s-%s' % (proj_id, entry.ptid))
-							fields = ['tags', 'sEvent']
-							values = [','.join(case.tags), 'A Pivotal Tracker story has been created by ' + author + ' for this case:\nhttps://www.pivotaltracker.com/story/show/%s' % entry.ptid]
+							fields = ['sTags', 'sEvent']
+							values = [','.join(case.tags).encode('utf8'), ('A Pivotal Tracker story has been created by ' + author + ' for this case:\nhttps://www.pivotaltracker.com/story/show/%s' % entry.ptid).encode('utf8')]
 							conn.edit_case(entry.fbid, fields, values)
 
 							# And add a comment to the Tracker story to indicate that it's imported from FogBugz
 							data = 'This story has been imported by ' + author + ' from the following FogBugz case:\n%s/default.asp?%s' % (obj.fburl, case.id)
 							data = '<note><text>%s</text></note>' % escape(data)
 
-							resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data, method='POST', headers=headers, deadline=deadline)
+							resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 							if resp.status_code >= 300:
+								logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
 								stat = '<span class="error">Error</span>'
 
-						except (FogBugzClientError, FogBugzServerError):
+						except (FogBugzClientError, FogBugzServerError), e:
+							logging.exception(str(e))
 							stat = '<span class="error">Error</span>'
 					else:
 						# A story has just been edited, currently we only propogate title changes, category changes, status
@@ -644,10 +699,11 @@ class WebHookHandler(webapp.RequestHandler):
 							# A new comment has just been created, add it to FogBugz as a case event
 							try:
 								if case is None:
-									case = conn.edit_case(entry.fbid, ['sEvent'], ['A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note], 'ixBug,tags,ixCategory,sCategory,sTitle')[0]
+									case = conn.edit_case(entry.fbid, ['sEvent'], [('A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note).encode('utf8')], 'ixBug,tags,ixCategory,sCategory,sTitle')[0]
 								else:
-									conn.edit_case(entry.fbid, ['sEvent'], ['A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note])
-							except (FogBugzClientError, FogBugzServerError):
+									conn.edit_case(entry.fbid, ['sEvent'], [('A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note).encode('utf8')])
+							except (FogBugzClientError, FogBugzServerError), e:
+								logging.exception(str(e))
 								stat = '<span class="error">Error</span>'
 
 						# Title, category, status and label changes are incorporated into a single edit request
@@ -663,27 +719,48 @@ class WebHookHandler(webapp.RequestHandler):
 
 							if entry.title is not None and entry.title != case.title:
 								fields.append('sTitle')
-								values.append(entry.title)
+								values.append(entry.title.encode('utf8'))
 
 							if entry.stype is not None:
-								# Get the corresponding FogBugz category of the Tracker type entry.stype
-								category = None
+								# This one is tricky, as category A -> stype B !== stype B -> category A
+								# We first get the corresponding Tracker type of the FogBugz category case.category_name
+								category = case.category_name.lower()
+
+								stype = None
 								for ln in obj.mapping.splitlines():
 									t = ln.partition('=')
-									if t[2].strip().lower() == entry.stype:
-										category = t[0].strip()
+									if t[0].strip().lower() in (category, '*'):
+										stype = t[2].strip().lower()
 										break
 
-								# entry.stype is either 'bug', 'feature', 'chore' or 'release'
-								if category is None:
-									if entry.stype == 'release':
-										category = 'Schedule Item'
+								if stype is None:
+									if category == 'bug' or category == 'feature':
+										stype = category
+									elif category == 'schedule item':
+										stype = 'release'
 									else:
-										category = entry.stype
+										stype = 'chore'
 
-								if category.lower() != case.category_name.lower():
-									fields.append('sCategory')
-									values.append(category)
+								if stype != entry.stype:
+									# The stype change was not made by FogTracker, propagation to FogBugz is needed
+									# Get the corresponding FogBugz category of the Tracker type entry.stype
+									category = None
+									for ln in obj.mapping.splitlines():
+										t = ln.partition('=')
+										if t[2].strip().lower() in (entry.stype, '*'):
+											category = t[0].strip()
+											break
+
+									# entry.stype is either 'bug', 'feature', 'chore' or 'release'
+									if category is None:
+										if entry.stype == 'release':
+											category = 'Schedule Item'
+										else:
+											category = entry.stype
+
+									if category.lower() != case.category_name.lower():
+										fields.append('sCategory')
+										values.append(category.encode('utf8'))
 
 							if entry.labels is not None:
 								for i in range(len(case.tags)-1, -1, -1):
@@ -706,7 +783,7 @@ class WebHookHandler(webapp.RequestHandler):
 									if obj.tagsync:
 										fields.append('sTags')
 										if entry.labels:
-											values.append('ts@%s-%s,%s' % (proj_id, entry.ptid, entry.labels))
+											values.append(('ts@%s-%s,%s' % (proj_id, entry.ptid, entry.labels)).encode('utf8'))
 										else:
 											values.append('ts@%s-%s' % (proj_id, entry.ptid))
 									else:
@@ -716,7 +793,7 @@ class WebHookHandler(webapp.RequestHandler):
 							# while no such restrictions exist in Tracker.
 							cmd = 'edit'
 							extra = False
-							if entry.state in ('started', 'finished', 'accepted'):
+							if entry.state in ('unstarted', 'started', 'finished', 'accepted'):
 								# We need to know the current status of the FogBugz case to decide which command to use
 								if entry.state == 'accepted':
 									# Close the case in FogBugz, if not already closed
@@ -740,9 +817,9 @@ class WebHookHandler(webapp.RequestHandler):
 
 										if modified:
 											fields.append('sTags')
-											values.append(','.join(case.tags))
+											values.append(','.join(case.tags).encode('utf8'))
 
-								if entry.state == 'started':
+								if entry.state == 'unstarted' or entry.state == 'started':
 									# Reactivate/reopen the case in FogBugz, if not already active
 									if 'reactivate' in case.operations:
 										# Case is currently resolved, reactivate it
@@ -788,7 +865,8 @@ class WebHookHandler(webapp.RequestHandler):
 											fields.append('ixStatus')
 											values.append(status)
 
-						except (FogBugzClientError, FogBugzServerError):
+						except (FogBugzClientError, FogBugzServerError), e:
+							logging.exception(str(e))
 							stat = '<span class="error">Error</span>'
 
 						if entry.state is not None and cmd == 'edit':
@@ -813,28 +891,30 @@ class WebHookHandler(webapp.RequestHandler):
 								evtText.append('Story deleted by ' + author + ' in Pivotal Tracker.')
 
 							fields.append('sEvent')
-							values.append('\n'.join(evtText))
+							values.append('\n'.join(evtText).encode('utf8'))
 							try:
 								conn.edit_case(entry.fbid, fields, values, cmd=cmd)
-							except (FogBugzClientError, FogBugzServerError):
+							except (FogBugzClientError, FogBugzServerError), e:
+								logging.exception(str(e))
 								stat = '<span class="error">Error</span>'
 
 							if extra:
 								# Extra step needed to close the case (after resolving it)
 								try:
 									if type != 'story_delete':
-										conn.edit_case(entry.fbid, ['sEvent'], ['By ' + author + ' in Pivotal Tracker.'], cmd='close')
+										conn.edit_case(entry.fbid, ['sEvent'], [('By ' + author + ' in Pivotal Tracker.').encode('utf8')], cmd='close')
 									else:
-										conn.edit_case(entry.fbid, ['sEvent'], ['Story deleted by ' + author + ' in Pivotal Tracker.'], cmd='close')
-								except (FogBugzClientError, FogBugzServerError):
+										conn.edit_case(entry.fbid, ['sEvent'], [('Story deleted by ' + author + ' in Pivotal Tracker.').encode('utf8')], cmd='close')
+								except (FogBugzClientError, FogBugzServerError), e:
+									logging.exception(str(e))
 									stat = '<span class="error">Error</span>'
 
 			# If the token has been updated, also update it in the integration object
-			if conn:
-				if obj.fbtoken != conn.token or obj.status != stat:
+			if (conn and obj.fbtoken != conn.token) or obj.status != stat:
+				if conn:
 					obj.fbtoken = conn.token
-					obj.status = stat
-					obj.put()
+				obj.status = stat
+				obj.put()
 
 		self.response.out.write('OK')
 
@@ -867,10 +947,11 @@ class URLTriggerHandler(webapp.RequestHandler):
 					return
 				stat = '<span class="ok">OK</span>'
 
-				# Fetch all events from that case to get detailed info
-				conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
-
+				conn = None
 				try:
+					# Fetch all events from that case to get detailed info
+					conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
+
 					case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,sCategory,tags,events')[0]
 
 					# We need to check whether the case is already imported into Tracker
@@ -914,6 +995,12 @@ class URLTriggerHandler(webapp.RequestHandler):
 										# The first comment is changed
 										pe = True
 
+								# If the parent or children of the case have changed, the effect is the same as a change
+								# to the first comment: we have to update the description of the corresponding story.
+								mo = re.search(r'(?:^|\.\s+)(Parent changed from|(Added|Removed) subcase) ', event.changes, re.MULTILINE)
+								if mo:
+									pe = True
+
 								mo = re.search(r'(?:^|\.\s+)Category changed from ', event.changes, re.MULTILINE)
 								if mo:
 									cc = True
@@ -936,11 +1023,11 @@ class URLTriggerHandler(webapp.RequestHandler):
 									if pe:
 										summary = case.events[0].text
 										if case.parent_case > '0':
-											summary = 'Parent Case: %s/default.asp?%s\n\n' % (conn.url, case.parent_case) + summary
+											summary = 'Parent Case: %s/default.asp?%s\n\n' % (obj.fburl, case.parent_case) + summary
 										if case.child_cases:
 											summary += '\n\nChild Cases:'
 											for cc in case.child_cases.split(','):
-												summary += '\n%s/default.asp?' % conn.url + cc
+												summary += '\n%s/default.asp?' % obj.fburl + cc
 										data += '<description>%s</description>' % escape(summary)
 
 									if cc:
@@ -950,7 +1037,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 										stype = None
 										for ln in obj.mapping.splitlines():
 											t = ln.partition('=')
-											if t[0].strip().lower() == category:
+											if t[0].strip().lower() in (category, '*'):
 												stype = t[2].strip().lower()
 												break
 
@@ -971,6 +1058,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 												del case.tags[i]
 										data += '<labels>%s</labels>' % escape(','.join(case.tags))
 
+									cs = True
 									if type == 'CaseResolved':
 										# Finish the story in Tracker
 										data += '<current_state>finished</current_state>'
@@ -980,31 +1068,41 @@ class URLTriggerHandler(webapp.RequestHandler):
 									elif type == 'CaseReactivated' or type == 'CaseReopened':
 										# Unstart the story in Tracker
 										data += '<current_state>unstarted</current_state>'
+									else:
+										cs = False
 
-									data += '</story>'
-									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=data, method='PUT', headers=headers, deadline=deadline)
+									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+									if resp.status_code == 422 and cs:
+										# This error probably occured because we tried to change the state of an unestimated story
+										data += '<estimate>1</estimate>'
+										resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+
 									if resp.status_code >= 300:
+										logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
 										stat = '<span class="error">Error</span>'
 
 								# Finally add a comment in Tracker to reflect this case event
-								data = event.description + ' in FogBugz'
+								data = event.description + ' in FogBugz at ' + event.date.replace('T', ' ')[:-4] + ' UTC'
 								if event.changes:
 									data += '\n' + event.changes
 								if event.text:
 									data += '\n' + event.text
 								data = '<note><text>%s</text></note>' % escape(data)
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data, method='POST', headers=headers, deadline=deadline)
+								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
+									logging.exception('URLFetch returned with HTTP %s' % resp.status_code)
 									stat = '<span class="error">Error</span>'
 
 								break
 
-				except (FogBugzClientError, FogBugzServerError):
+				except (FogBugzClientError, FogBugzServerError), e:
+					logging.exception(str(e))
 					stat = '<span class="error">Error</span>'
 
 				# If the token has been updated, also update it in the integration object
-				if obj.fbtoken != conn.token or obj.status != stat:
-					obj.fbtoken = conn.token
+				if (conn and obj.fbtoken != conn.token) or obj.status != stat:
+					if conn:
+						obj.fbtoken = conn.token
 					obj.status = stat
 					obj.put()
 

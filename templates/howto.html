@@ -7,7 +7,8 @@
 				Sign in to the application using your Google account, and create an integration profile with relevant information,
 				including the URL of your FogBugz server (both standalone and hosted options are supported), authentication info
 				used to access FogBugz and Pivotal Tracker, and other options to customize the integration. Make sure the specified
-				accounts have <em>admin privileges</em> in the respective system, so that it can make all the changes as supposed to.
+				user accounts have <em>admin privileges</em> in their respective system, so that all the changes can be made as
+				supposed.
 			</div>
 		</li>
 		<li>
@@ -38,10 +39,13 @@
 				<div class="code">http:/<span class="symbol">appid</span>.appspot.com/<span class="symbol">token</span>/CaseFeed/?q=<span class="symbol">query</span></div>
 				Here <span class="symbol">query</span> is the search string used to specify which FogBugz cases you want to include
 				in the feed. Documentation on the syntax of the FogBugz search can be found <a href="http://fogbugz.stackexchange.com/questions/4399">here</a>.
-				You probably want to at least specify a project using <em>project:"proj_name"</em>. Note that the system always
-				retrieves only active cases that are not already imported into Pivotal Tracker, and you don't have to specify these
-				metrics in the query. You can create multiple integrations in Pivotal Tracker using diffrent <span class="symbol">query</span>
-				strings to put different kinds of FogBugz cases into different panels.
+				You probably want to at least specify a project using <span class="code">project:<span class="symbol">proj_name</span></span>.
+				Note that at the time of writing Pivotal Tracker doesn't escape the URL before requesting it, and thus if you have
+				special characters like whitespaces or quotes in your <span class="symbol">query</span>, you have to escape them
+				manually before putting the URL into this field. Another thing to note is that FogTracker always retrieves only
+				active cases that are not already imported into Pivotal Tracker, and you don't have to specify these metrics in
+				the <span class="symbol">query</span>. You can create multiple integrations in Pivotal Tracker using diffrent
+				<span class="symbol">query</span> strings to put different kinds of FogBugz cases into different panels.
 			</div>
 		</li>
 		<li>
