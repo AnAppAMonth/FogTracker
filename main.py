@@ -997,7 +997,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 								# If the parent or children of the case have changed, the effect is the same as a change
 								# to the first comment: we have to update the description of the corresponding story.
-								mo = re.search(r'(?:^|\.\s+)(Parent changed from|(Added|Removed) subcase) ', event.changes, re.MULTILINE)
+								mo = re.search(r'(?:^|\.\s+)(Parent changed from|(Added|Removed) subcases?) ', event.changes, re.MULTILINE)
 								if mo:
 									pe = True
 
@@ -1006,7 +1006,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 									cc = True
 
 								if obj.tagsync:
-									mo = re.search(r"(?:^|\.\s+)(Added|Removed) tag '", event.changes, re.MULTILINE)
+									mo = re.search(r"(?:^|\.\s+)(Added|Removed) tags? '", event.changes, re.MULTILINE)
 									if mo:
 										tar = True
 
