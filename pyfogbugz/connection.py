@@ -22,10 +22,10 @@
 """
 Provides connectivity to FogBugz
 """
-import sys
 import urllib
 import xml.sax
 import logging
+import time
 import BaseHTTPServer
 msg_dict = BaseHTTPServer.BaseHTTPRequestHandler.responses
 
@@ -56,15 +56,28 @@ class Connection(object):
 
 		try:
 			url = "%s/%s" % (self.url, path)
-			logging.info(url)
-			if self.offline:
-				response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=60)
-			else:
-				response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=10)
-			if response.status_code < 300:
-				return response
-		except KeyboardInterrupt:
-			sys.exit("Keyboard Interrupt")
+			retries = 0
+			while retries <= 2:
+				if self.offline:
+					response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=60)
+				else:
+					response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=10)
+
+				if response.status_code < 300:
+					return response
+				else:
+					logging.exception('URLFetch returned with HTTP %s when requesting URL:\n%s' % (response.status_code, url))
+					# If this is a server error, we retry the request up to 2 times
+					if response.status_code >= 500:
+						retries += 1
+						# Wait a couple seconds before another attempt
+						if self.offline:
+							time.sleep(retries*2)
+						else:
+							time.sleep(1)
+						continue
+				break
+
 		except Exception, e:
 			pass
 

@@ -408,17 +408,30 @@ class WebHookHandler(webapp.RequestHandler):
 											if fetch_story:
 												headers = {}
 												headers['X-TrackerToken'] = obj.pttoken
-												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
-												if resp.status_code >= 300:
-													logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
-													stat = '<span class="error">Error</span>'
-												else:
-													try:
-														rdom = minidom.parseString(resp.content)
-														story = rdom.getElementsByTagName('story')[0]
-													except (ExpatError, IndexError), e:
-														logging.exception(str(e))
+												retries = 0
+												while retries <= 2:
+													resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
+													if resp.status_code >= 300:
+														logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
 														stat = '<span class="error">Error</span>'
+
+														# If this is a server error, we retry the request up to 2 times
+														if resp.status_code >= 500:
+															retries += 1
+															# Wait a couple seconds before another attempt
+															if offline:
+																time.sleep(retries*2)
+															else:
+																time.sleep(1)
+															continue
+													else:
+														try:
+															rdom = minidom.parseString(resp.content)
+															story = rdom.getElementsByTagName('story')[0]
+														except (ExpatError, IndexError), e:
+															logging.exception(str(e))
+															stat = '<span class="error">Error</span>'
+													break
 
 											try:
 												title = story.getElementsByTagName('name')[0].firstChild.nodeValue
@@ -489,10 +502,23 @@ class WebHookHandler(webapp.RequestHandler):
 											headers['X-TrackerToken'] = obj.pttoken
 											headers['Content-Type'] = 'application/xml'
 											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id></story>' % (case.id, obj.ptintid)
-											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), payload=data, method='PUT', headers=headers, deadline=deadline)
-											if resp.status_code >= 300:
-												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data))
-												stat = '<span class="error">Error</span>'
+											retries = 0
+											while retries <= 2:
+												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), payload=data, method='PUT', headers=headers, deadline=deadline)
+												if resp.status_code >= 300:
+													logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data))
+													stat = '<span class="error">Error</span>'
+
+													# If this is a server error, we retry the request up to 2 times
+													if resp.status_code >= 500:
+														retries += 1
+														# Wait a couple seconds before another attempt
+														if offline:
+															time.sleep(retries*2)
+														else:
+															time.sleep(1)
+														continue
+												break
 
 											# Create a case event for each note/comment in the Tracker story
 											try:
@@ -518,10 +544,23 @@ class WebHookHandler(webapp.RequestHandler):
 											data = 'A FogBugz case has been created by ' + author + ' for this story:\n%s/default.asp?%s' % (obj.fburl, case.id)
 											data = '<note><text>%s</text></note>' % escape(data)
 
-											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
-											if resp.status_code >= 300:
-												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
-											stat = '<span class="error">Error</span>'
+											retries = 0
+											while retries <= 2:
+												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+												if resp.status_code >= 300:
+													logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+													stat = '<span class="error">Error</span>'
+
+													# If this is a server error, we retry the request up to 2 times
+													if resp.status_code >= 500:
+														retries += 1
+														# Wait a couple seconds before another attempt
+														if offline:
+															time.sleep(retries*2)
+														else:
+															time.sleep(1)
+														continue
+												break
 
 										except (FogBugzClientError, FogBugzServerError), e:
 											logging.exception(str(e))
@@ -642,10 +681,23 @@ class WebHookHandler(webapp.RequestHandler):
 							headers['Content-Type'] = 'application/xml'
 							if obj.tagsync and case.tags:
 								data = '<story><labels>%s</labels></story>' % escape(','.join(case.tags))
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
-								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
-									stat = '<span class="error">Error</span>'
+								retries = 0
+								while retries <= 2:
+									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+									if resp.status_code >= 300:
+										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+										stat = '<span class="error">Error</span>'
+
+										# If this is a server error, we retry the request up to 2 times
+										if resp.status_code >= 500:
+											retries += 1
+											# Wait a couple seconds before another attempt
+											if offline:
+												time.sleep(retries*2)
+											else:
+												time.sleep(1)
+											continue
+									break
 
 							# Third, add all existing events in this FogBugz case into Tracker as comments on this story
 							first = True
@@ -657,10 +709,23 @@ class WebHookHandler(webapp.RequestHandler):
 									data += '\n' + event.text
 								data = '<note><text>%s</text></note>' % escape(data)
 
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
-								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
-									stat = '<span class="error">Error</span>'
+								retries = 0
+								while retries <= 2:
+									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+									if resp.status_code >= 300:
+										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+										stat = '<span class="error">Error</span>'
+
+										# If this is a server error, we retry the request up to 2 times
+										if resp.status_code >= 500:
+											retries += 1
+											# Wait a couple seconds before another attempt
+											if offline:
+												time.sleep(retries*2)
+											else:
+												time.sleep(1)
+											continue
+									break
 
 								first = False
 
@@ -674,10 +739,23 @@ class WebHookHandler(webapp.RequestHandler):
 							data = 'This story has been imported by ' + author + ' from the following FogBugz case:\n%s/default.asp?%s' % (obj.fburl, case.id)
 							data = '<note><text>%s</text></note>' % escape(data)
 
-							resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
-							if resp.status_code >= 300:
-								logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
-								stat = '<span class="error">Error</span>'
+							retries = 0
+							while retries <= 2:
+								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+								if resp.status_code >= 300:
+									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+									stat = '<span class="error">Error</span>'
+
+									# If this is a server error, we retry the request up to 2 times
+									if resp.status_code >= 500:
+										retries += 1
+										# Wait a couple seconds before another attempt
+										if offline:
+											time.sleep(retries*2)
+										else:
+											time.sleep(1)
+										continue
+								break
 
 						except (FogBugzClientError, FogBugzServerError), e:
 							logging.exception(str(e))
@@ -1073,15 +1151,28 @@ class URLTriggerHandler(webapp.RequestHandler):
 									else:
 										cs = False
 
-									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
-									if resp.status_code == 422 and cs:
-										# This error probably occured because we tried to change the state of an unestimated story
-										data += '<estimate>1</estimate>'
+									retries = 0
+									while retries <= 2:
 										resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+										if resp.status_code == 422 and cs:
+											# This error probably occured because we tried to change the state of an unestimated story
+											data += '<estimate>1</estimate>'
+											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
 
-									if resp.status_code >= 300:
-										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, (data + '</story>').encode('utf8')))
-										stat = '<span class="error">Error</span>'
+										if resp.status_code >= 300:
+											logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, (data + '</story>').encode('utf8')))
+											stat = '<span class="error">Error</span>'
+
+											# If this is a server error, we retry the request up to 2 times
+											if resp.status_code >= 500:
+												retries += 1
+												# Wait a couple seconds before another attempt
+												if offline:
+													time.sleep(retries*2)
+												else:
+													time.sleep(1)
+												continue
+										break
 
 								# Finally add a comment in Tracker to reflect this case event
 								data = event.description + ' in FogBugz at ' + event.date.replace('T', ' ')[:-4] + ' UTC'
@@ -1090,10 +1181,23 @@ class URLTriggerHandler(webapp.RequestHandler):
 								if event.text:
 									data += '\n' + event.text
 								data = '<note><text>%s</text></note>' % escape(data)
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
-								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
-									stat = '<span class="error">Error</span>'
+								retries = 0
+								while retries <= 2:
+									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+									if resp.status_code >= 300:
+										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+										stat = '<span class="error">Error</span>'
+
+										# If this is a server error, we retry the request up to 2 times
+										if resp.status_code >= 500:
+											retries += 1
+											# Wait a couple seconds before another attempt
+											if offline:
+												time.sleep(retries*2)
+											else:
+												time.sleep(1)
+											continue
+									break
 
 								break
 
