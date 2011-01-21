@@ -302,9 +302,9 @@ class CaseFeedHandler(webapp.RequestHandler):
 		self.response.out.write(output.encode('utf8'))
 
 class Story(object):
-	def __init__(self, fbid):
+	def __init__(self, fbid, ptid):
 		self.fbid = fbid
-		self.ptid = None
+		self.ptid = ptid
 
 		# These changes are propagated to FogBugz
 		self.title = None
@@ -357,7 +357,7 @@ class WebHookHandler(webapp.RequestHandler):
 			try:
 				author = dom.getElementsByTagName('author')[0].firstChild.nodeValue
 			except IndexError:
-				author = 'Unknown'
+				author = 'Unknown User'
 			stories = dom.getElementsByTagName('stories')[0]
 			entries = []
 			for story in stories.childNodes:
@@ -365,10 +365,62 @@ class WebHookHandler(webapp.RequestHandler):
 					if story.nodeName == 'story':
 						# First check whether this story is an import from the FogBugz installation specified in this
 						# integration profile.
-						if story.getElementsByTagName('integration_id'):
+
+						# Unfortunately, Tracker no longer puts the integration_id, other_id and other_url fields in the
+						# body of the activity hook request, making it impossible to tell whether this is an external
+						# story or not. Therefore, we now have to make another request to fetch the story. However, this
+						# only works if the story still exists, and if not (e.g. this is a story_delete event), we have
+						# to search The FogBugz installation to get the linked case there if existed.
+						full_story = story
+						ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
+
+						if type != 'story_delete':
+							headers = {}
+							headers['X-TrackerToken'] = obj.pttoken
+							retries = 0
+							while retries <= 2:
+								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
+								if resp.status_code >= 300:
+									logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
+									stat = '<span class="error">Error</span>'
+
+									# If this is a server error, we retry the request up to 2 times
+									if resp.status_code >= 500:
+										retries += 1
+										# Wait a couple seconds before another attempt
+										if offline:
+											time.sleep(retries*2)
+										else:
+											time.sleep(1)
+										continue
+								else:
+									try:
+										rdom = minidom.parseString(resp.content)
+										full_story = rdom.getElementsByTagName('story')[0]
+									except (ExpatError, IndexError), e:
+										logging.exception(str(e))
+										stat = '<span class="error">Error</span>'
+								break
+
+						fbid = None
+						if full_story == story:
+							# Search in the FogBugz installation
+							if conn is None:
+								conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
+
+							cases = conn.list_cases('tag:"ts@%s-%s"' % (proj_id, ptid), 'ixBug')
+							if cases:
+								fbid = cases[0].id
+
+
+						if fbid:
+							# We already know that this story is an import from this FogBugz installation, no further
+							# checking necessary
+							pass
+						elif full_story.getElementsByTagName('integration_id'):
 							# This story is an import, check the source
 							try:
-								url = story.getElementsByTagName('other_url')[0].firstChild.nodeValue.partition('://')[2]
+								url = full_story.getElementsByTagName('other_url')[0].firstChild.nodeValue.partition('://')[2]
 								fburl = obj.fburl.partition('://')[2]
 								if url.find(fburl) != 0:
 									# This story was not imported from this FogBugz installation, nothing needs to be done
@@ -377,9 +429,14 @@ class WebHookHandler(webapp.RequestHandler):
 								# This story is under another kind of integration
 								continue
 						else:
+							# We want to play the safety card here, if we failed to fetch the full story, we cannot be sure
+							# whether it's already an external story or not.
+							if full_story == story:
+								continue
+
 							# This story isn't an import from any source, check its labels if obj.ptprop is True
 							if obj.ptprop:
-								labels = story.getElementsByTagName('labels')
+								labels = full_story.getElementsByTagName('labels')
 								if labels:
 									labels = labels[0].firstChild.nodeValue.split(',')
 									proj = None
@@ -390,7 +447,6 @@ class WebHookHandler(webapp.RequestHandler):
 
 									if proj:
 										# We should propagate the story to FogBugz
-										ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
 										tags = 'ts@%s-%s' % (proj_id, ptid)
 
 										# If tagsync is True, add the labels as tags to the new case
@@ -400,95 +456,52 @@ class WebHookHandler(webapp.RequestHandler):
 										fields = ['sTags', 'sProject']
 										values = [tags.encode('utf8'), proj.encode('utf8')]
 
-										# If this is a new story, no problem. But if the user just added the special tag
-										# to an existing story, some relevant info (e.g. title, desc) may not be included
-										# in the request body, in which case we have to fetch the story from Tracker.
-										fetch_story = False
-										while True:
-											if fetch_story:
-												headers = {}
-												headers['X-TrackerToken'] = obj.pttoken
-												retries = 0
-												while retries <= 2:
-													resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
-													if resp.status_code >= 300:
-														logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
-														stat = '<span class="error">Error</span>'
+										try:
+											title = full_story.getElementsByTagName('name')[0].firstChild.nodeValue
+										except IndexError:
+											pass
+										else:
+											fields.append('sTitle')
+											values.append(title.encode('utf8'))
 
-														# If this is a server error, we retry the request up to 2 times
-														if resp.status_code >= 500:
-															retries += 1
-															# Wait a couple seconds before another attempt
-															if offline:
-																time.sleep(retries*2)
-															else:
-																time.sleep(1)
-															continue
-													else:
-														try:
-															rdom = minidom.parseString(resp.content)
-															story = rdom.getElementsByTagName('story')[0]
-														except (ExpatError, IndexError), e:
-															logging.exception(str(e))
-															stat = '<span class="error">Error</span>'
+										try:
+											desc = full_story.getElementsByTagName('description')[0].firstChild.nodeValue
+										except IndexError:
+											pass
+										else:
+											fields.append('sEvent')
+											values.append(desc.encode('utf8'))
+
+										try:
+											assigned_to = full_story.getElementsByTagName('requested_by')[0].firstChild.nodeValue
+										except IndexError:
+											pass
+										else:
+											fields.append('sPersonAssignedTo')
+											values.append(assigned_to.encode('utf8'))
+
+										try:
+											stype = full_story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
+										except IndexError:
+											pass
+										else:
+											# Get the corresponding FogBugz category of the Tracker type stype
+											category = None
+											for ln in obj.mapping.splitlines():
+												t = ln.partition('=')
+												if t[2].strip().lower() in (stype, '*'):
+													category = t[0].strip()
 													break
 
-											try:
-												title = story.getElementsByTagName('name')[0].firstChild.nodeValue
-											except IndexError:
-												if not fetch_story:
-													fetch_story = True
-													continue
-											else:
-												fields.append('sTitle')
-												values.append(title.encode('utf8'))
+											# stype is either 'bug', 'feature', 'chore' or 'release'
+											if category is None:
+												if stype == 'release':
+													category = 'Schedule Item'
+												else:
+													category = stype
 
-											try:
-												desc = story.getElementsByTagName('description')[0].firstChild.nodeValue
-											except IndexError:
-												if not fetch_story:
-													fetch_story = True
-													continue
-											else:
-												fields.append('sEvent')
-												values.append(desc.encode('utf8'))
-
-											try:
-												assigned_to = story.getElementsByTagName('requested_by')[0].firstChild.nodeValue
-											except IndexError:
-												if not fetch_story:
-													fetch_story = True
-													continue
-											else:
-												fields.append('sPersonAssignedTo')
-												values.append(assigned_to.encode('utf8'))
-
-											try:
-												stype = story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
-											except IndexError:
-												if not fetch_story:
-													fetch_story = True
-													continue
-											else:
-												# Get the corresponding FogBugz category of the Tracker type stype
-												category = None
-												for ln in obj.mapping.splitlines():
-													t = ln.partition('=')
-													if t[2].strip().lower() in (stype, '*'):
-														category = t[0].strip()
-														break
-
-												# stype is either 'bug', 'feature', 'chore' or 'release'
-												if category is None:
-													if stype == 'release':
-														category = 'Schedule Item'
-													else:
-														category = stype
-
-												fields.append('sCategory')
-												values.append(category.encode('utf8'))
-
-											break
+											fields.append('sCategory')
+											values.append(category.encode('utf8'))
 
 										# Now create the case
 										try:
@@ -521,21 +534,14 @@ class WebHookHandler(webapp.RequestHandler):
 												break
 
 											# Create a case event for each note/comment in the Tracker story
-											try:
-												rdom = minidom.parseString(resp.content)
-												story = rdom.getElementsByTagName('story')[0]
-											except (ExpatError, IndexError), e:
-												logging.exception(str(e))
-												stat = '<span class="error">Error</span>'
-											else:
-												notes = story.getElementsByTagName('notes')
-												if notes:
-													for note in notes[0].childNodes:
-														if note.nodeName == 'note':
-															dt = note.getElementsByTagName('text')[0].firstChild.nodeValue
-															au = note.getElementsByTagName('author')[0].firstChild.nodeValue
-															tm = note.getElementsByTagName('noted_at')[0].firstChild.nodeValue
-															conn.edit_case(case.id, ['sEvent'], [('A comment was posted by ' + au + ' in Pivotal Tracker at ' + tm + ':\n' + dt).encode('utf8')])
+											notes = full_story.getElementsByTagName('notes')
+											if notes:
+												for note in notes[0].childNodes:
+													if note.nodeName == 'note':
+														dt = note.getElementsByTagName('text')[0].firstChild.nodeValue
+														au = note.getElementsByTagName('author')[0].firstChild.nodeValue
+														tm = note.getElementsByTagName('noted_at')[0].firstChild.nodeValue
+														conn.edit_case(case.id, ['sEvent'], [('A comment was posted by ' + au + ' in Pivotal Tracker at ' + tm + ':\n' + dt).encode('utf8')])
 
 											# Finally add a comment to the case to indicate that this is imported from Tracker
 											conn.edit_case(case.id, ['sEvent'], [('This case has been created by ' + author + ' from the following Pivotal Tracker story:\nhttps://www.pivotaltracker.com/story/show/%s' % ptid).encode('utf8')])
@@ -569,9 +575,9 @@ class WebHookHandler(webapp.RequestHandler):
 							continue
 
 						# If we are here, it means this story is an import from this FogBugz installation
-						fbid = story.getElementsByTagName('other_id')[0].firstChild.nodeValue
-						entry = Story(fbid)
-						entry.ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
+						if not fbid:
+							fbid = full_story.getElementsByTagName('other_id')[0].firstChild.nodeValue
+						entry = Story(fbid, ptid)
 						if type == 'story_create':
 							entries.append(entry)
 						elif type == 'story_delete':
