@@ -953,7 +953,10 @@ class WebHookHandler(webapp.RequestHandler):
 							evtText.append('\tState changed to %s.' % entry.state)
 
 						if entry.estimate is not None:
-							evtText.append('\tEstimate changed to %s.' % entry.estimate)
+							if entry.estimate == '-1':
+								evtText.append('\tEstimate changed to Unestimated.')
+							else:
+								evtText.append('\tEstimate changed to %s.' % entry.estimate)
 
 						if entry.owner is not None:
 							evtText.append('\tOwner changed to %s.' % entry.owner)
