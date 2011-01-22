@@ -267,15 +267,13 @@ class CaseFeedHandler(webapp.RequestHandler):
 				stype = None
 				for ln in obj.mapping.splitlines():
 					t = ln.partition('=')
-					if t[0].strip().lower() in (category, '*'):
+					if t[0].strip().lower() in (category, '*') and t[2].strip() != '*':
 						stype = t[2].strip().lower()
 						break
 
 				if stype is None:
 					if category == 'bug' or category == 'feature':
 						stype = category
-					elif category == 'schedule item':
-						stype = 'release'
 					else:
 						stype = 'chore'
 
@@ -489,7 +487,7 @@ class WebHookHandler(webapp.RequestHandler):
 											category = None
 											for ln in obj.mapping.splitlines():
 												t = ln.partition('=')
-												if t[2].strip().lower() in (stype, '*'):
+												if t[2].strip().lower() in (stype, '*') and t[0].strip() != '*':
 													category = t[0].strip()
 													break
 
@@ -813,15 +811,13 @@ class WebHookHandler(webapp.RequestHandler):
 								stype = None
 								for ln in obj.mapping.splitlines():
 									t = ln.partition('=')
-									if t[0].strip().lower() in (category, '*'):
+									if t[0].strip().lower() in (category, '*') and t[2].strip() != '*':
 										stype = t[2].strip().lower()
 										break
 
 								if stype is None:
 									if category == 'bug' or category == 'feature':
 										stype = category
-									elif category == 'schedule item':
-										stype = 'release'
 									else:
 										stype = 'chore'
 
@@ -831,7 +827,7 @@ class WebHookHandler(webapp.RequestHandler):
 									category = None
 									for ln in obj.mapping.splitlines():
 										t = ln.partition('=')
-										if t[2].strip().lower() in (entry.stype, '*'):
+										if t[2].strip().lower() in (entry.stype, '*') and t[0].strip() != '*':
 											category = t[0].strip()
 											break
 
@@ -1123,15 +1119,13 @@ class URLTriggerHandler(webapp.RequestHandler):
 										stype = None
 										for ln in obj.mapping.splitlines():
 											t = ln.partition('=')
-											if t[0].strip().lower() in (category, '*'):
+											if t[0].strip().lower() in (category, '*') and t[2].strip() != '*':
 												stype = t[2].strip().lower()
 												break
 
 										if stype is None:
 											if category == 'bug' or category == 'feature':
 												stype = category
-											elif category == 'schedule item':
-												stype = 'release'
 											else:
 												stype = "chore"
 

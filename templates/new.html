@@ -203,18 +203,17 @@
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
 							Specify the mappings between FogBugz categories and Pivotal Tracker story types. By default
-							the following mappings are used:<br/>
+							the following mappings are used (everything is case-insensitive):<br/>
 							<p><em>
 								Bug = Bug<br/>
 								Feature = Feature<br/>
 								Chore = Chore<br/>
-								Inquiry = Chore<br/>
-								Schedule Item = Release<br/>
-								* = Chore
+								* = Chore<br/>
+								Schedule Item = Release
 							</em></p>
 							These mappings are evaluated from top to bottom, and the first match will be used. For example,
-							The corresponding FogBugz category of the Pivotal Tracker type "Chore" is "Chore", not "Inquiry".
-							Your specified mappings are evaluated before the default ones, also from top to bottom.
+							The corresponding Pivotal Tracker type of the FogBugz category "Schedule Item" is "Chore", not
+							"Release". Your specified mappings are evaluated before the default ones, also from top to bottom.
 						</span>
 					</a>
 				</td>
