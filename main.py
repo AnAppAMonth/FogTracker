@@ -1099,7 +1099,8 @@ class URLTriggerHandler(webapp.RequestHandler):
 								headers['X-TrackerToken'] = obj.pttoken
 								headers['Content-Type'] = 'application/xml'
 
-								if tc or pe or cc or tar or type != 'CaseEdited':
+								fetched = False
+								if tc or pe or cc or tar:
 									# We must modify the story (title/description/category/labels/state)
 									data = '<story>'
 									if tc:
@@ -1141,19 +1142,44 @@ class URLTriggerHandler(webapp.RequestHandler):
 												del case.tags[i]
 										data += '<labels>%s</labels>' % escape(','.join(case.tags))
 
-									cs = True
-									if type == 'CaseResolved':
-										# We should finish the story in Tracker. However, Tracker stories of type "chore"
-										# or "release" don't have the "finished" state, and thus we use "accepted" instead.
-										if not cc:
-											# We must fetch the story type from Tracker. If failed, we take the safe road
-											# and assume it's a chore
-											stype = 'chore'
-											headers = {}
-											headers['X-TrackerToken'] = obj.pttoken
+									data += '</story>'
+
+									retries = 0
+									while retries <= 2:
+										resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+										if resp.status_code >= 300:
+											logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
+											stat = '<span class="error">Error</span>'
+
+											# If this is a server error, we retry the request up to 2 times
+											if resp.status_code >= 500:
+												retries += 1
+												# Wait a couple seconds before another attempt
+												if offline:
+													time.sleep(retries*2)
+												else:
+													time.sleep(1)
+												continue
+										else:
+											fetched = True
+										break
+
+								# We use a separate request for state changes to isolate errors. The most frequently used
+								# commands here (resolve and close) requires an extra fetch of the story anyway, so in most
+								# cases this doesn't cause an increase in the total number of requests.
+								if type != 'CaseEdited':
+									ne = False
+									if type in ('CaseResolved', 'CaseClosed'):
+										# We must fetch the story type and estimate from Tracker. If failed, we take the
+										# safe road and assume the type is "chore"
+										stype = 'chore'
+										estimate = '1'
+										if not fetched:
+											headers2 = {}
+											headers2['X-TrackerToken'] = obj.pttoken
 											retries = 0
 											while retries <= 2:
-												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), method='GET', headers=headers, deadline=deadline)
+												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), method='GET', headers=headers2, deadline=deadline)
 												if resp.status_code >= 300:
 													logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
 													stat = '<span class="error">Error</span>'
@@ -1168,50 +1194,67 @@ class URLTriggerHandler(webapp.RequestHandler):
 															time.sleep(1)
 														continue
 												else:
-													try:
-														rdom = minidom.parseString(resp.content)
-														full_story = rdom.getElementsByTagName('story')[0]
-														stype = full_story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
-													except (ExpatError, IndexError), e:
-														logging.exception(str(e))
-														stat = '<span class="error">Error</span>'
+													fetched = True
 												break
 
-										if stype in ('bug', 'feature'):
-											data += '<current_state>finished</current_state>'
+										if fetched:
+											try:
+												rdom = minidom.parseString(resp.content)
+												full_story = rdom.getElementsByTagName('story')[0]
+												stype = full_story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
+												if stype != 'release':
+													estimate = full_story.getElementsByTagName('estimate')[0].firstChild.nodeValue
+											except (ExpatError, IndexError), e:
+												logging.exception(str(e))
+												stat = '<span class="error">Error</span>'
+
+										if type == 'CaseResolved':
+											# We should finish the story in Tracker. However, Tracker stories of type "chore"
+											# or "release" don't have the "finished" state, and thus we use "accepted" instead.
+											if stype in ('bug', 'feature'):
+												data = '<current_state>finished</current_state>'
+											else:
+												data = '<current_state>accepted</current_state>'
 										else:
-											data += '<current_state>accepted</current_state>'
-									elif type == 'CaseClosed':
-										# Accept the story in Tracker
-										data += '<current_state>accepted</current_state>'
+											# Accept the story in Tracker
+											data = '<current_state>accepted</current_state>'
+
+										if stype != 'release':
+											# An estimate is only required/allowed for story types other than "release"
+											if estimate == '-1':
+												data += '<estimate>1</estimate>'
+											else:
+												# We might need to add the estimate field later if an error is encountered
+												ne = True
+
 									elif type == 'CaseReactivated' or type == 'CaseReopened':
 										# Unstart the story in Tracker
-										data += '<current_state>unstarted</current_state>'
+										data = '<current_state>unstarted</current_state>'
 									else:
-										cs = False
+										data = ''
 
-									retries = 0
-									while retries <= 2:
-										resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
-										if resp.status_code == 422 and cs:
-											# This error probably occured because we tried to change the state of an unestimated story
-											data += '<estimate>1</estimate>'
-											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=(data + '</story>').encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+									if data:
+										data = '<story>' + data
+										retries = 0
+										while retries <= 2:
+											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=data + '</story>', method='PUT', headers=headers, deadline=deadline)
+											if resp.status_code >= 300:
+												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data + '</story>'))
+												stat = '<span class="error">Error</span>'
 
-										if resp.status_code >= 300:
-											logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, (data + '</story>').encode('utf8')))
-											stat = '<span class="error">Error</span>'
-
-											# If this is a server error, we retry the request up to 2 times
-											if resp.status_code >= 500:
-												retries += 1
-												# Wait a couple seconds before another attempt
-												if offline:
-													time.sleep(retries*2)
-												else:
-													time.sleep(1)
-												continue
-										break
+												# If this is a server error, we retry the request up to 2 times
+												if resp.status_code >= 500 or resp.status_code == 422:
+													retries += 1
+													if retries == 1 and ne:
+														# This error probably occured because we tried to change the state of an unestimated story
+														data += '<estimate>1</estimate>'
+													# Wait a couple seconds before another attempt
+													if offline:
+														time.sleep(retries*2)
+													else:
+														time.sleep(1)
+													continue
+											break
 
 								# Finally add a comment in Tracker to reflect this case event
 								data = event.description + ' in FogBugz at ' + event.date.replace('T', ' ')[:-4] + ' UTC'
