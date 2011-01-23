@@ -10,6 +10,11 @@ handlers:
 - url: /new|/edit|/delete
   script: main.py
   login: required
+  secure: always
+
+- url: /
+  script: main.py
+  secure: always
 
 - url: .*
   script: main.py

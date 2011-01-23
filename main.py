@@ -139,7 +139,7 @@ class MainPage(webapp.RequestHandler):
 						template_values['fburl_empty'] = True
 				if fbuser == '':
 					template_values['fbuser_empty'] = True
-				if fbpass == '':
+				if fbpass == '' and not token:
 					template_values['fbpass_empty'] = True
 				if pttoken == '':
 					template_values['pttoken_empty'] = True
@@ -175,9 +175,20 @@ class MainPage(webapp.RequestHandler):
 						if entry:
 							# Make sure this integration was created by this user
 							if entry.account == user.user_id():
-								entry.fburl = fburl
-								entry.fbuser = fbuser
-								entry.fbpass = fbpass
+								cc = False
+								if fburl != entry.fburl:
+									entry.fburl = fburl
+									cc = True
+								if fbuser != entry.fbuser:
+									entry.fbuser = fbuser
+									cc = True
+								if fbpass and fbpass != entry.fbpass:
+									entry.fbpass = fbpass
+									cc = True
+								if cc:
+									# If either the url, username, or password has changed, we must get a new token
+									entry.fbtoken = None
+
 								entry.pttoken = pttoken
 								entry.tagsync = tagsync
 								entry.ptprop = ptprop
