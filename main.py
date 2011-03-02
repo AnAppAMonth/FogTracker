@@ -504,7 +504,7 @@ class WebHookHandler(webapp.RequestHandler):
 
 											# stype is either 'bug', 'feature', 'chore' or 'release'
 											if category is None:
-												if stype == 'release':
+												if stype in ('chore', 'release'):
 													category = 'Schedule Item'
 												else:
 													category = stype
@@ -844,7 +844,7 @@ class WebHookHandler(webapp.RequestHandler):
 
 									# entry.stype is either 'bug', 'feature', 'chore' or 'release'
 									if category is None:
-										if entry.stype == 'release':
+										if entry.stype in ('chore', 'release'):
 											category = 'Schedule Item'
 										else:
 											category = entry.stype
