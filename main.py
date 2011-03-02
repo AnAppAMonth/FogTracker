@@ -445,7 +445,7 @@ class WebHookHandler(webapp.RequestHandler):
 
 							# This story isn't an import from any source, check its labels if obj.ptprop is True
 							if obj.ptprop:
-								labels = full_story.getElementsByTagName('labels')
+								labels = story.getElementsByTagName('labels')
 								if labels:
 									labels = labels[0].firstChild.nodeValue.split(',')
 									proj = None
@@ -1213,8 +1213,15 @@ class URLTriggerHandler(webapp.RequestHandler):
 												rdom = minidom.parseString(resp.content)
 												full_story = rdom.getElementsByTagName('story')[0]
 												stype = full_story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
-												if stype != 'release':
+												if stype == 'feature':
 													estimate = full_story.getElementsByTagName('estimate')[0].firstChild.nodeValue
+												elif stype != 'release':
+													# estimates may or may not be allowed
+													try:
+														estimate = full_story.getElementsByTagName('estimate')[0].firstChild.nodeValue
+													except IndexError:
+														# estimates are probably not allowed
+														estimate = None
 											except (ExpatError, IndexError), e:
 												logging.exception(str(e))
 												stat = '<span class="error">Error</span>'
@@ -1234,7 +1241,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 											# An estimate is only required/allowed for story types other than "release"
 											if estimate == '-1':
 												data += '<estimate>1</estimate>'
-											else:
+											elif estimate is not None:
 												# We might need to add the estimate field later if an error is encountered
 												ne = True
 
