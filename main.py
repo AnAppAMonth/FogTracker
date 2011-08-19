@@ -369,6 +369,9 @@ class WebHookHandler(webapp.RequestHandler):
 				author = dom.getElementsByTagName('author')[0].firstChild.nodeValue
 			except IndexError:
 				author = 'Unknown User'
+			except AttributeError:
+				# There is an <author> tag, but its content is empty
+				author = 'Unknown User'
 			stories = dom.getElementsByTagName('stories')[0]
 			entries = []
 			for story in stories.childNodes:
@@ -452,7 +455,12 @@ class WebHookHandler(webapp.RequestHandler):
 							if obj.ptprop:
 								labels = story.getElementsByTagName('labels')
 								if labels:
-									labels = labels[0].firstChild.nodeValue.split(',')
+									try:
+										labels = labels[0].firstChild.nodeValue.split(',')
+									except AttributeError:
+										# There is a <labels> tag, but its content is empty
+										labels = []
+
 									proj = None
 									for i in range(len(labels)-1, -1, -1):
 										if labels[i][:3] == 'fb:':
@@ -474,6 +482,9 @@ class WebHookHandler(webapp.RequestHandler):
 											title = full_story.getElementsByTagName('name')[0].firstChild.nodeValue
 										except IndexError:
 											pass
+										except AttributeError:
+											# There is a <name> tag, but its content is empty
+											pass
 										else:
 											fields.append('sTitle')
 											values.append(title.encode('utf8'))
@@ -482,6 +493,9 @@ class WebHookHandler(webapp.RequestHandler):
 											desc = full_story.getElementsByTagName('description')[0].firstChild.nodeValue
 										except IndexError:
 											pass
+										except AttributeError:
+											# There is a <description> tag, but its content is empty
+											pass
 										else:
 											fields.append('sEvent')
 											values.append(desc.encode('utf8'))
@@ -489,6 +503,9 @@ class WebHookHandler(webapp.RequestHandler):
 										try:
 											assigned_to = full_story.getElementsByTagName('requested_by')[0].firstChild.nodeValue
 										except IndexError:
+											pass
+										except AttributeError:
+											# There is a <requested_by> tag, but its content is empty
 											pass
 										else:
 											fields.append('sPersonAssignedTo')
@@ -555,8 +572,16 @@ class WebHookHandler(webapp.RequestHandler):
 											if notes:
 												for note in notes[0].childNodes:
 													if note.nodeName == 'note':
-														dt = note.getElementsByTagName('text')[0].firstChild.nodeValue
-														au = note.getElementsByTagName('author')[0].firstChild.nodeValue
+														try:
+															dt = note.getElementsByTagName('text')[0].firstChild.nodeValue
+														except AttributeError:
+															# There is a <text> tag, but its content is empty
+															dt = ''
+														try:
+															au = note.getElementsByTagName('author')[0].firstChild.nodeValue
+														except AttributeError:
+															# There is an <author> tag, but its content is empty
+															au = 'Unknown User'
 														tm = note.getElementsByTagName('noted_at')[0].firstChild.nodeValue
 														conn.edit_case(case.id, ['sEvent'], [('A comment was posted by ' + au + ' in Pivotal Tracker at ' + tm + ':\n' + dt).encode('utf8')])
 
@@ -611,6 +636,10 @@ class WebHookHandler(webapp.RequestHandler):
 								entry.title = story.getElementsByTagName('name')[0].firstChild.nodeValue
 							except IndexError:
 								pass
+							except AttributeError:
+								# There is a <name> tag, but its content is empty
+								# This should be an error, ignore it
+								pass
 							else:
 								changed = True
 
@@ -632,6 +661,10 @@ class WebHookHandler(webapp.RequestHandler):
 								entry.labels = story.getElementsByTagName('labels')[0].firstChild.nodeValue
 							except IndexError:
 								pass
+							except AttributeError:
+								# There is a <labels> tag, but its content is empty
+								entry.labels = ''
+								changed = True
 							else:
 								changed = True
 
@@ -639,7 +672,11 @@ class WebHookHandler(webapp.RequestHandler):
 								notes = story.getElementsByTagName('notes')[0]
 								for note in notes.childNodes:
 									if note.nodeName == 'note':
-										data = note.getElementsByTagName('text')[0].firstChild.nodeValue
+										try:
+											data = note.getElementsByTagName('text')[0].firstChild.nodeValue
+										except AttributeError:
+											# There is a <text> tag, but its content is empty
+											data = ''
 										# Only propagate the note to FogBugz if it's not itself propagated from there
 										if re.match(r'[^\n]* in FogBugz at [\d\-:\s]* UTC(\n|$)|(A FogBugz case has been created by [^\n]* for this story|This story has been imported by [^\n]* from the following FogBugz case):\n', data) is None:
 											entry.notes.append(data)
@@ -663,14 +700,22 @@ class WebHookHandler(webapp.RequestHandler):
 								entry.owner = story.getElementsByTagName('owned_by')[0].firstChild.nodeValue
 							except IndexError:
 								pass
+							except AttributeError:
+								# There is an <owned_by> tag, but its content is empty
+								entry.owner = 'none'
+								changed = True
 							else:
 								if entry.owner == '':
-									entry.owner = 'Nobody'
+									entry.owner = 'none'
 								changed = True
 
 							try:
 								entry.requester = story.getElementsByTagName('requested_by')[0].firstChild.nodeValue
 							except IndexError:
+								pass
+							except AttributeError:
+								# There is a <requested_by> tag, but its content is empty
+								# This should be an error, ignore it
 								pass
 							else:
 								if entry.requester:
