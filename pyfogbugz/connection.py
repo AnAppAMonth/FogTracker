@@ -58,6 +58,7 @@ class Connection(object):
 			url = "%s/%s" % (self.url, path)
 			retries = 0
 			while retries <= 2:
+				logging.info(url)
 				if self.offline:
 					response = urlfetch.fetch(url=url, payload=data, method=method, headers=headers, deadline=60)
 				else:

@@ -21,6 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
+import sys, traceback
 import re, random, time, logging
 from datetime import datetime
 from xml.sax.saxutils import escape
@@ -359,6 +360,7 @@ class WebHookHandler(webapp.RequestHandler):
 			conn = None
 
 			# We must parse the XML no matter what, because any type of event can contain a note/comment in it
+			logging.info(self.request.body)
 			dom = minidom.parseString(self.request.body)
 			type = dom.getElementsByTagName('event_type')[0].firstChild.nodeValue
 			proj_id = dom.getElementsByTagName('project_id')[0].firstChild.nodeValue
@@ -388,7 +390,9 @@ class WebHookHandler(webapp.RequestHandler):
 							headers['X-TrackerToken'] = obj.pttoken
 							retries = 0
 							while retries <= 2:
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), method='GET', headers=headers, deadline=deadline)
+								url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
+								logging.info(url)
+								resp = urlfetch.fetch(url, method='GET', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
 									logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
 									stat = '<span class="error">Error</span>'
@@ -404,6 +408,7 @@ class WebHookHandler(webapp.RequestHandler):
 										continue
 								else:
 									try:
+										logging.info(resp.content)
 										rdom = minidom.parseString(resp.content)
 										full_story = rdom.getElementsByTagName('story')[0]
 									except (ExpatError, IndexError), e:
@@ -526,7 +531,10 @@ class WebHookHandler(webapp.RequestHandler):
 											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id></story>' % (case.id, obj.ptintid)
 											retries = 0
 											while retries <= 2:
-												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid), payload=data, method='PUT', headers=headers, deadline=deadline)
+												url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
+												logging.info(url)
+												logging.info(data)
+												resp = urlfetch.fetch(url, payload=data, method='PUT', headers=headers, deadline=deadline)
 												if resp.status_code >= 300:
 													logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data))
 													stat = '<span class="error">Error</span>'
@@ -561,7 +569,10 @@ class WebHookHandler(webapp.RequestHandler):
 
 											retries = 0
 											while retries <= 2:
-												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+												url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, ptid)
+												logging.info(url)
+												logging.info(data)
+												resp = urlfetch.fetch(url, payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 												if resp.status_code >= 300:
 													logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 													stat = '<span class="error">Error</span>'
@@ -670,7 +681,8 @@ class WebHookHandler(webapp.RequestHandler):
 							if changed:
 								entries.append(entry)
 				except:
-					pass
+					# Unexpected exception, log it
+					logging.exception(''.join(traceback.format_exception(*sys.exc_info())[-2:]).strip().replace('\n',': '))
 
 			if entries:
 				# At least one of the listed stories is an import from FogBugz, and more operations are needed
@@ -698,7 +710,10 @@ class WebHookHandler(webapp.RequestHandler):
 								data = '<story><labels>%s</labels></story>' % escape(','.join(case.tags))
 								retries = 0
 								while retries <= 2:
-									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+									url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid)
+									logging.info(url)
+									logging.info(data)
+									resp = urlfetch.fetch(url, payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
 									if resp.status_code >= 300:
 										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 										stat = '<span class="error">Error</span>'
@@ -726,7 +741,10 @@ class WebHookHandler(webapp.RequestHandler):
 
 								retries = 0
 								while retries <= 2:
-									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+									url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid)
+									logging.info(url)
+									logging.info(data)
+									resp = urlfetch.fetch(url, payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 									if resp.status_code >= 300:
 										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 										stat = '<span class="error">Error</span>'
@@ -756,7 +774,10 @@ class WebHookHandler(webapp.RequestHandler):
 
 							retries = 0
 							while retries <= 2:
-								resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+								url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, entry.ptid)
+								logging.info(url)
+								logging.info(data)
+								resp = urlfetch.fetch(url, payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 								if resp.status_code >= 300:
 									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 									stat = '<span class="error">Error</span>'
@@ -1157,7 +1178,10 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 									retries = 0
 									while retries <= 2:
-										resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
+										url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid)
+										logging.info(url)
+										logging.info(data)
+										resp = urlfetch.fetch(url, payload=data.encode('utf8'), method='PUT', headers=headers, deadline=deadline)
 										if resp.status_code >= 300:
 											logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 											stat = '<span class="error">Error</span>'
@@ -1190,7 +1214,9 @@ class URLTriggerHandler(webapp.RequestHandler):
 											headers2['X-TrackerToken'] = obj.pttoken
 											retries = 0
 											while retries <= 2:
-												resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), method='GET', headers=headers2, deadline=deadline)
+												url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid)
+												logging.info(url)
+												resp = urlfetch.fetch(url, method='GET', headers=headers2, deadline=deadline)
 												if resp.status_code >= 300:
 													logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
 													stat = '<span class="error">Error</span>'
@@ -1210,6 +1236,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 										if fetched:
 											try:
+												logging.info(resp.content)
 												rdom = minidom.parseString(resp.content)
 												full_story = rdom.getElementsByTagName('story')[0]
 												stype = full_story.getElementsByTagName('story_type')[0].firstChild.nodeValue.lower()
@@ -1255,7 +1282,10 @@ class URLTriggerHandler(webapp.RequestHandler):
 										data = '<story>' + data
 										retries = 0
 										while retries <= 2:
-											resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid), payload=data + '</story>', method='PUT', headers=headers, deadline=deadline)
+											url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid)
+											logging.info(url)
+											logging.info(data + '</story>')
+											resp = urlfetch.fetch(url, payload=data + '</story>', method='PUT', headers=headers, deadline=deadline)
 											if resp.status_code >= 300:
 												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data + '</story>'))
 												stat = '<span class="error">Error</span>'
@@ -1283,7 +1313,10 @@ class URLTriggerHandler(webapp.RequestHandler):
 								data = '<note><text>%s</text></note>' % escape(data)
 								retries = 0
 								while retries <= 2:
-									resp = urlfetch.fetch('https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid), payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
+									url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s/notes' % (proj_id, tid)
+									logging.info(url)
+									logging.info(data)
+									resp = urlfetch.fetch(url, payload=data.encode('utf8'), method='POST', headers=headers, deadline=deadline)
 									if resp.status_code >= 300:
 										logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data.encode('utf8')))
 										stat = '<span class="error">Error</span>'
