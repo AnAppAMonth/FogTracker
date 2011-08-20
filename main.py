@@ -974,7 +974,10 @@ class WebHookHandler(webapp.RequestHandler):
 
 										if modified:
 											fields.append('sTags')
-											values.append(','.join(case.tags).encode('utf8'))
+											if case.tags:
+												values.append(','.join(case.tags).encode('utf8'))
+											else:
+												values.append(',')
 
 								if entry.state == 'unstarted' or entry.state == 'started':
 									# Reactivate/reopen the case in FogBugz, if not already active
