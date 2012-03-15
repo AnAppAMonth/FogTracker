@@ -49,6 +49,10 @@ class Integration(db.Model):
 	# Whether tags in FogBugz and labels in Tracker are synchronized by the integration
 	tagsync = db.BooleanProperty(required=True)
 
+	# Whether the project and area of a FogBugz case are added to its linked Tracker story as labels
+	projsync = db.BooleanProperty(required=True, default=False)
+	areasync = db.BooleanProperty(required=True, default=False)
+
 	# Whether a new Tracker story satisfying a certain criteria (has a label of the format fb:proj) should be
 	# propagated to FogBugz
 	ptprop = db.BooleanProperty(required=True)

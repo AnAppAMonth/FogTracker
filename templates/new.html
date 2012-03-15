@@ -112,7 +112,7 @@
 				<td>
 					<table border="0" cellspacing="0" cellpadding="0"><tr>
 						<td valign="top"><input class="cb" type="checkbox" name="tagsync" value="on"{% if tagsync %} checked="true"{% endif %} /></td>
-						<td>Synchronize tags and labels in linked FogBugz cases and<br/> Pivotal Tracker stories</td>
+						<td>Synchronize tags and labels in linked FogBugz cases<br/> and Pivotal Tracker stories</td>
 					</tr></table>
 				</td>
 				<td class="htd" valign="top">
@@ -135,8 +135,8 @@
 				<td valign="top"></td>
 				<td>
 					<table border="0" cellspacing="0" cellpadding="0"><tr>
-						<td valign="top"><input class="cb" type="checkbox" name="ptprop" value="on"{% if ptprop %} checked="true"{% endif %} /></td>
-						<td>Propagate Pivotal Tracker stories with <em>a special label</em><br/> to FogBugz</td>
+						<td valign="top"><input class="cb" type="checkbox" name="areasync" value="on"{% if areasync %} checked="true"{% endif %} /></td>
+						<td>Add the area of each FogBugz case as a label to its<br/> linked Pivotal Tracker story</td>
 					</tr></table>
 				</td>
 				<td class="htd" valign="top">
@@ -144,14 +144,49 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							If checked, for each Pivotal Tracker story with a special label of the form <em>fb:&lt;proj&gt;</em>,
-							if it doesn't already have a corresponding case in FogBugz, such a case will be created under
-							the project &lt;proj&gt;, and the Pivotal Tracker story will be linked to the new FogBugz case.
-							The special label itself won't be added to the new case (as a tag, even if the synchronization
-							option above is checked), and can later be removed without any effects. In fact, if the
-							synchronization option above is checked, the special label will be removed automatically when
-							the tags in the new FogBugz case are modified and synchronized to the Pivotal Tracker story
-							for the first time.
+							If checked, when a FogBugz case is imported into Pivotal Tracker, its area is automatically added to the new story as a label. This special label will also be updated whenever you change the area of the case in FogBugz.
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td valign="top"></td>
+				<td>
+					<table border="0" cellspacing="0" cellpadding="0"><tr>
+						<td valign="top"><input class="cb" type="checkbox" name="projsync" value="on"{% if projsync %} checked="true"{% endif %} /></td>
+						<td>Add the project of each FogBugz case as a label to<br/> its linked Pivotal Tracker story</td>
+					</tr></table>
+				</td>
+				<td class="htd" valign="top">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							<p>If checked, when a FogBugz case is imported into Pivotal Tracker, its project is automatically added to the new story as a label. This special label will also be updated whenever you change the project of the case in FogBugz.</p>
+							<p>This is useful if you link one Pivotal Tracker project to multiple FogBugz projects.</p>
+						</span>
+					</a>
+				</td>
+			</tr>
+			<tr>
+				<td valign="top"></td>
+				<td>
+					<table border="0" cellspacing="0" cellpadding="0"><tr>
+						<td valign="top"><input class="cb" type="checkbox" name="ptprop" value="on"{% if ptprop %} checked="true"{% endif %} /></td>
+						<td>Allow creating and editing FogBugz cases in Pivotal<br/> Tracker using <em>special labels</em></td>
+					</tr></table>
+				</td>
+				<td class="htd" valign="top">
+					<a class="tooltip" href="#" tabindex="-1">
+						<img border="0" src="/static/images/qmark.png"/>
+						<span class="custom help">
+							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
+							If checked, you can use special labels in Pivotal Tracker to create and edit cases in FogBugz. Currently the following labels are supported:
+							<ol>
+							<li><em>fb:&lt;proj&gt;</em>: If this story doesn't already have a linked case in FogBugz, create such a case under the project &lt;proj&gt;, and link this story to that new case; otherwise, change the project of this story's linked FogBugz case to &lt;proj&gt;.</li>
+							<li><em>area:&lt;area&gt;</em>: Change the area of this story's linked FogBugz case to &lt;area&gt;.</li>
+							</ol>
+							The special labels themselves are meant for one-time use only, and <em>will automatically be deleted</em> by FogTracker once the command is received.
 						</span>
 					</a>
 				</td>
@@ -162,8 +197,8 @@
 				<td></td>
 				<td colspan="2" class="error">
 					<em>
-						* You must specify the integration ID in Pivotal Tracker if you choose to propagate<br/>
-						certain Pivotal Tracker stories to FogBugz. This ID is needed to link the story in<br/>
+						* You must specify the integration ID in Pivotal Tracker if you choose to allow<br/>
+						creating FogBugz cases in Pivotal Tracker. This ID is needed to link the story in<br/>
 						question to the new FogBugz case created.
 					</em>
 				</td>
@@ -177,8 +212,7 @@
 						<img border="0" src="/static/images/qmark.png"/>
 						<span class="custom help">
 							<img class="helpimg" src="/static/images/help.png" alt="Help" height="48" width="48" />
-							<p>This ID is only needed if you have checked the above option to propagate certain Pivotal
-							Tracker stories to FogBugz. Leave it empty otherwise.</p>
+							<p>This ID is only needed if you have checked the above option to allow creating FogBugz cases in Pivotal Tracker. Leave it empty otherwise.</p>
 							<p>To get the integration ID in Pivotal Tracker, follow Step 4 in the how-to page to create
 							a new integration of type <em>Other</em>, and fill out the form, but leave out the <em>Import
 							API URL</em> field for now. Click <em>Save</em> and you will see this newly created integration

@@ -87,6 +87,8 @@ class MainPage(webapp.RequestHandler):
 							template_values['fbuser'] = entry.fbuser
 							template_values['pttoken'] = entry.pttoken
 							template_values['tagsync'] = entry.tagsync
+							template_values['areasync'] = entry.areasync
+							template_values['projsync'] = entry.projsync
 							template_values['ptprop'] = entry.ptprop
 							template_values['ptintid'] = entry.ptintid
 							template_values['mapping'] = entry.mapping
@@ -122,6 +124,8 @@ class MainPage(webapp.RequestHandler):
 				fbpass = self.request.get('fbpass')
 				pttoken = self.request.get('pttoken')
 				tagsync = self.request.get('tagsync') == 'on'
+				areasync = self.request.get('areasync') == 'on'
+				projsync = self.request.get('projsync') == 'on'
 				ptprop = self.request.get('ptprop') == 'on'
 				ptintid = self.request.get('ptintid')
 				mapping = self.request.get('mapping')
@@ -156,6 +160,8 @@ class MainPage(webapp.RequestHandler):
 					template_values['fbuser'] = fbuser
 					template_values['pttoken'] = pttoken
 					template_values['tagsync'] = tagsync
+					template_values['areasync'] = areasync
+					template_values['projsync'] = projsync
 					template_values['ptprop'] = ptprop
 					template_values['ptintid'] = ptintid
 					template_values['mapping'] = mapping
@@ -192,6 +198,8 @@ class MainPage(webapp.RequestHandler):
 
 								entry.pttoken = pttoken
 								entry.tagsync = tagsync
+								entry.areasync = areasync
+								entry.projsync = projsync
 								entry.ptprop = ptprop
 								entry.ptintid = ptintid
 								entry.mapping = mapping
@@ -219,8 +227,8 @@ class MainPage(webapp.RequestHandler):
 
 						# Now create a new integration object with the data
 						entry = Integration(account=user.user_id(), token=token, created=created, fburl=fburl, fbuser=fbuser,
-											fbpass=fbpass, pttoken=pttoken, tagsync=tagsync, ptprop=ptprop, ptintid=ptintid,
-											mapping=mapping, resolve=resolve, status='<span class="new">New</span>')
+											fbpass=fbpass, pttoken=pttoken, tagsync=tagsync, areasync=areasync, projsync=projsync,
+											ptprop=ptprop, ptintid=ptintid, mapping=mapping, resolve=resolve, status='<span class="new">New</span>')
 						entry.put()
 
 			elif page == 'delete':
@@ -456,15 +464,19 @@ class WebHookHandler(webapp.RequestHandler):
 								labels = story.getElementsByTagName('labels')
 								if labels:
 									try:
-										labels = labels[0].firstChild.nodeValue.split(',')
+										labels = labels[0].firstChild.nodeValue.lower().split(',')
 									except AttributeError:
 										# There is a <labels> tag, but its content is empty
 										labels = []
 
 									proj = None
+									area = None
 									for i in range(len(labels)-1, -1, -1):
 										if labels[i][:3] == 'fb:':
 											proj = labels[i][3:]
+											del labels[i]
+										elif labels[i][:5] == 'area:':
+											area = labels[i][5:]
 											del labels[i]
 
 									if proj:
@@ -477,6 +489,11 @@ class WebHookHandler(webapp.RequestHandler):
 
 										fields = ['sTags', 'sProject']
 										values = [tags.encode('utf8'), proj.encode('utf8')]
+
+										# If area is not None, also specify the area of the new case
+										if area:
+											fields.append('sArea')
+											values.append(area.encode('utf8'))
 
 										try:
 											title = full_story.getElementsByTagName('name')[0].firstChild.nodeValue
@@ -539,13 +556,18 @@ class WebHookHandler(webapp.RequestHandler):
 											if conn is None:
 												conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
 
-											case = conn.edit_case(None, fields, values, cmd = 'new')[0]
+											case = conn.edit_case(None, fields, values, 'sProject,sArea', cmd = 'new')[0]
+
+											if obj.projsync:
+												labels.append(case.project_title)
+											if obj.areasync:
+												labels.append(case.area_title)
 
 											# We must link the story in Tracker to the FogBugz case
 											headers = {}
 											headers['X-TrackerToken'] = obj.pttoken
 											headers['Content-Type'] = 'application/xml'
-											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id></story>' % (case.id, obj.ptintid)
+											data = '<story><other_id>%s</other_id><integration_id>%s</integration_id><labels>%s</labels></story>' % (case.id, obj.ptintid, ','.join(labels))
 											retries = 0
 											while retries <= 2:
 												url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
@@ -617,6 +639,33 @@ class WebHookHandler(webapp.RequestHandler):
 											logging.exception(str(e))
 											stat = '<span class="error">Error</span>'
 
+									elif area:
+										# Update the story to remove the command labels
+										headers = {}
+										headers['X-TrackerToken'] = obj.pttoken
+										headers['Content-Type'] = 'application/xml'
+										data = '<story><labels>%s</labels></story>' % (','.join(labels))
+										retries = 0
+										while retries <= 2:
+											url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
+											logging.info(url)
+											logging.info(data)
+											resp = urlfetch.fetch(url, payload=data, method='PUT', headers=headers, deadline=deadline)
+											if resp.status_code >= 300:
+												logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data))
+												stat = '<span class="error">Error</span>'
+
+												# If this is a server error, we retry the request up to 2 times
+												if resp.status_code >= 500:
+													retries += 1
+													# Wait a couple seconds before another attempt
+													if offline:
+														time.sleep(retries*2)
+													else:
+														time.sleep(1)
+													continue
+											break
+
 							continue
 
 						# If we are here, it means this story is an import from this FogBugz installation
@@ -658,7 +707,7 @@ class WebHookHandler(webapp.RequestHandler):
 								changed = True
 
 							try:
-								entry.labels = story.getElementsByTagName('labels')[0].firstChild.nodeValue
+								entry.labels = story.getElementsByTagName('labels')[0].firstChild.nodeValue.lower()
 							except IndexError:
 								pass
 							except AttributeError:
@@ -745,14 +794,27 @@ class WebHookHandler(webapp.RequestHandler):
 						# A new story has just been created (by importing an existing case from FogBugz)
 						try:
 							# First, get all tags and a list of all existing events of the FogBugz case
-							case = conn.list_cases(entry.fbid, 'ixBug,tags,events')[0]
+							case = conn.list_cases(entry.fbid, 'ixBug,tags,events,sProject,sArea')[0]
 
-							# Second, if tagsync is checked, propagate the tags to the new Tracker story
+							# Second, update labels of the new Tracker story:
+							# 1. If tagsync is checked, propagate the tags to the new Tracker story
+							# 2. If projsync is checked, add the project name as a label
+							# 3. If areasync is checked, add the area name as a label
 							headers = {}
 							headers['X-TrackerToken'] = obj.pttoken
 							headers['Content-Type'] = 'application/xml'
 							if obj.tagsync and case.tags:
-								data = '<story><labels>%s</labels></story>' % escape(','.join(case.tags))
+								labels = case.tags
+							else:
+								labels = []
+
+							if obj.projsync:
+								labels.append(case.project_title)
+							if obj.areasync:
+								labels.append(case.area_title)
+
+							if labels:
+								data = '<story><labels>%s</labels></story>' % escape(','.join(labels))
 								retries = 0
 								while retries <= 2:
 									url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, entry.ptid)
@@ -843,7 +905,7 @@ class WebHookHandler(webapp.RequestHandler):
 							stat = '<span class="error">Error</span>'
 					else:
 						# A story has just been edited, currently we only propogate title changes, category changes, status
-						# changes, label changes and new notes/comments to FogBugz
+						# changes, label changes, project/area changes and new notes/comments to FogBugz
 
 						# If multiple actions are performed at once, we first create a Fogbugz case event for each note/comment
 						# included, and finally create another case event for all other changes (if any), including title,
@@ -858,7 +920,7 @@ class WebHookHandler(webapp.RequestHandler):
 							# A new comment has just been created, add it to FogBugz as a case event
 							try:
 								if case is None:
-									case = conn.edit_case(entry.fbid, ['sEvent'], [('A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note).encode('utf8')], 'ixBug,tags,ixCategory,sCategory,sTitle')[0]
+									case = conn.edit_case(entry.fbid, ['sEvent'], [('A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note).encode('utf8')], 'ixBug,tags,ixCategory,sCategory,sTitle,sProject,sArea')[0]
 								else:
 									conn.edit_case(entry.fbid, ['sEvent'], [('A comment has been posted by ' + author + ' in Pivotal Tracker:\n' + note).encode('utf8')])
 							except (FogBugzClientError, FogBugzServerError), e:
@@ -869,12 +931,17 @@ class WebHookHandler(webapp.RequestHandler):
 						fields = []
 						values = []
 						evtText = []
+						proj = None
+						area = None
 
 						try:
 							# To avoid propagating changes from FogBugz back to FogBugz (and therefore creating useless empty
 							# case events), we check the target FogBugz case to see if a change has really been made.
 							if case is None:
-								case = conn.list_cases(entry.fbid, 'ixBug,tags,ixCategory,sCategory,sTitle')[0]
+								case = conn.list_cases(entry.fbid, 'ixBug,tags,ixCategory,sCategory,sTitle,sProject,sArea')[0]
+
+							fbproj = case.project_title.lower()
+							fbarea = case.area_title.lower()
 
 							if entry.title is not None and entry.title != case.title:
 								fields.append('sTitle')
@@ -927,24 +994,73 @@ class WebHookHandler(webapp.RequestHandler):
 										case.tags[i] = case.tags[i].lower()
 								case.tags.sort()
 
-								labels = entry.labels.split(',')
-								modified = False
-								for i in range(len(labels)-1, -1, -1):
-									if labels[i][:3] == 'fb:':
-										del labels[i]
-										modified = True
-								if modified:
-									entry.labels = ','.join(labels)
+								is_command = False
+								if obj.ptprop or obj.areasync or obj.projsync:
+									# ''.split(',') is [''], not []...
+									if entry.labels:
+										labels = entry.labels.split(',')
+										if not obj.tagsync:
+											l2 = entry.labels.split(',')
+										for i in range(len(labels)-1, -1, -1):
+											if obj.ptprop:
+												if labels[i][:3] == 'fb:':
+													proj = labels[i][3:]
+													del labels[i]
+													if not obj.tagsync:
+														is_command = True
+														del l2[i]
+													continue
+												elif labels[i][:5] == 'area:':
+													area = labels[i][5:]
+													del labels[i]
+													if not obj.tagsync:
+														is_command = True
+														del l2[i]
+													continue
 
-								if entry.labels.lower() != ','.join(case.tags):
-									if obj.tagsync:
+											if obj.projsync and labels[i] == fbproj:
+												del labels[i]
+												continue
+											elif obj.areasync and labels[i] == fbarea:
+												del labels[i]
+												continue
+
+										if obj.tagsync:
+											labels.sort()
+											entry.labels = ','.join(labels)
+										else:
+											entry.labels = ','.join(l2)
+
+									else:
+										labels = []
+
+								if obj.tagsync:
+									if entry.labels != ','.join(case.tags):
 										fields.append('sTags')
 										if entry.labels:
 											values.append(('ts@%s-%s,%s' % (proj_id, entry.ptid, entry.labels)).encode('utf8'))
 										else:
 											values.append('ts@%s-%s' % (proj_id, entry.ptid))
-									else:
+								else:
+									# This case is tricky because we cannot just compare the labels to the tags to decide
+									# whether a real change has been made, which is made worse by the fact that we allow
+									# special "command labels" which obviously shouldn't be reported in Fogbugz as a change
+									# in labels.
+									# Therefore, we only report the changes when no "command label" is detected, which is
+									# perfectly fine because we will immediately delete these labels in Tracker, and
+									# thus triggering another webhook event. Any changes will be reported then.
+									#
+									# Also note that we include the project and area labels in this report.
+									if not is_command:
 										evtText.append('\tLabels changed to ' + entry.labels + '.')
+
+							if proj and proj != fbproj:
+								fields.append('sProject')
+								values.append(proj.encode('utf8'))
+
+							if area and area != fbarea:
+								fields.append('sArea')
+								values.append(area.encode('utf8'))
 
 							# Status changes are tricky, as there are restrictions on which status can be changed to which status,
 							# while no such restrictions exist in Tracker.
@@ -966,6 +1082,8 @@ class WebHookHandler(webapp.RequestHandler):
 									if type == 'story_delete':
 										# Since the story in Tracker is deleted, we need to remove the special tag in the
 										# corresponding FogBugz case.
+										# Note that since this is a 'story_delete' event, entry.labels must be None, so
+										# case.tags wasn't changed by code above.
 										modified = False
 										for i in range(len(case.tags)-1, -1, -1):
 											if case.tags[i][:3] == 'ts@':
@@ -1056,7 +1174,7 @@ class WebHookHandler(webapp.RequestHandler):
 							fields.append('sEvent')
 							values.append('\n'.join(evtText).encode('utf8'))
 							try:
-								conn.edit_case(entry.fbid, fields, values, cmd=cmd)
+								case = conn.edit_case(entry.fbid, fields, values, 'sProject,sArea', cmd=cmd)[0]
 							except (FogBugzClientError, FogBugzServerError), e:
 								logging.exception(str(e))
 								stat = '<span class="error">Error</span>'
@@ -1071,6 +1189,41 @@ class WebHookHandler(webapp.RequestHandler):
 								except (FogBugzClientError, FogBugzServerError), e:
 									logging.exception(str(e))
 									stat = '<span class="error">Error</span>'
+
+						# Update the project/area labels of the Tracker story in the following circumstances.
+						# Note that for either proj or area to be not None, obj.ptprop must be True.
+						# Also note that since there is a label change, this must not be a 'story_delete' event.
+						if (entry.labels is not None) and (obj.projsync or obj.areasync or proj or area):
+							if obj.projsync:
+								labels.append(case.project_title)
+							if obj.areasync:
+								labels.append(case.area_title)
+
+							headers = {}
+							headers['X-TrackerToken'] = obj.pttoken
+							headers['Content-Type'] = 'application/xml'
+							data = '<story><labels>%s</labels></story>' % (','.join(labels))
+							retries = 0
+							while retries <= 2:
+								url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
+								logging.info(url)
+								logging.info(data)
+								resp = urlfetch.fetch(url, payload=data, method='PUT', headers=headers, deadline=deadline)
+								if resp.status_code >= 300:
+									logging.exception('URLFetch returned with HTTP %s:\n%s\n\nData Sent:\n%s' % (resp.status_code, resp.content, data))
+									stat = '<span class="error">Error</span>'
+
+									# If this is a server error, we retry the request up to 2 times
+									if resp.status_code >= 500:
+										retries += 1
+										# Wait a couple seconds before another attempt
+										if offline:
+											time.sleep(retries*2)
+										else:
+											time.sleep(1)
+										continue
+								break
+
 
 			# If the token has been updated, also update it in the integration object
 			if (conn and obj.fbtoken != conn.token) or obj.status != stat:
@@ -1115,7 +1268,7 @@ class URLTriggerHandler(webapp.RequestHandler):
 					# Fetch all events from that case to get detailed info
 					conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
 
-					case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,sCategory,tags,events')[0]
+					case = conn.list_cases(cid, 'ixBug,ixBugParent,ixBugChildren,sTitle,sCategory,tags,events,sProject,sArea')[0]
 
 					# We need to check whether the case is already imported into Tracker
 					proj_id = None
@@ -1145,6 +1298,8 @@ class URLTriggerHandler(webapp.RequestHandler):
 								pe = False		# the first post was edited
 								cc = False		# the category was changed
 								tar = False		# one or more tags were added or removed
+								pc = False      # the project was changed
+								ac = False      # the area was changed
 
 								mo = re.search(r'(?:^|\.\s+)Title changed from ', event.changes, re.MULTILINE)
 								if mo:
@@ -1175,13 +1330,29 @@ class URLTriggerHandler(webapp.RequestHandler):
 									if mo:
 										tar = True
 
+								if obj.projsync:
+									mo = re.search(r'(?:^|\.\s+)Project changed from [\'"](.+)[\'"] to [\'"]' + re.escape(case.project_title) + r'[\'"]\.(?:$|\s+)', event.changes, re.MULTILINE)
+									if mo:
+										pc = True
+										old_proj = mo.group(1).lower()
+
+								if obj.areasync:
+									mo = re.search(r'(?:^|\.\s+)Area changed from [\'"](.+)[\'"] to [\'"]' + re.escape(case.area_title) + r'[\'"]\.(?:$|\s+)', event.changes, re.MULTILINE)
+									if mo:
+										ac = True
+										old_area = mo.group(1).lower()
+
+								# Headers for POST and PUT
 								headers = {}
 								headers['X-TrackerToken'] = obj.pttoken
 								headers['Content-Type'] = 'application/xml'
+								# Headers for GET
+								headers2 = {}
+								headers2['X-TrackerToken'] = obj.pttoken
 
 								fetched = False
-								if tc or pe or cc or tar:
-									# We must modify the story (title/description/category/labels/state)
+								if tc or pe or cc or tar or pc or ac:
+									# We must modify the story (title/description/category/labels/project/area/state)
 									data = '<story>'
 									if tc:
 										data += '<name>%s</name>' % escape(case.title)
@@ -1215,12 +1386,78 @@ class URLTriggerHandler(webapp.RequestHandler):
 
 										data += '<story_type>%s</story_type>' % escape(stype)
 
-									if tar:
-										# First remove the special tag
+									if tar or (obj.tagsync and (pc or ac)):
+										# We need to update the labels, first remove the special tag
 										for i in range(len(case.tags)-1, -1, -1):
 											if case.tags[i][:3] == 'ts@':
 												del case.tags[i]
-										data += '<labels>%s</labels>' % escape(','.join(case.tags))
+
+										labels = case.tags
+										if pc:
+											labels.append(case.project_title)
+										if ac:
+											labels.append(case.area_title)
+
+										data += '<labels>%s</labels>' % escape(','.join(labels))
+									elif pc or ac:
+										# This is more tricky, as we don't sync tags and labels, we must get the labels
+										# from Tracker to update them
+										retries = 0
+										while retries <= 2:
+											url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid)
+											logging.info(url)
+											resp = urlfetch.fetch(url, method='GET', headers=headers2, deadline=deadline)
+											if resp.status_code >= 300:
+												logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
+												stat = '<span class="error">Error</span>'
+
+												# If this is a server error, we retry the request up to 2 times
+												if resp.status_code >= 500:
+													retries += 1
+													# Wait a couple seconds before another attempt
+													if offline:
+														time.sleep(retries*2)
+													else:
+														time.sleep(1)
+													continue
+											else:
+												fetched = True
+											break
+
+										if fetched:
+											try:
+												logging.info(resp.content)
+												rdom = minidom.parseString(resp.content)
+												full_story = rdom.getElementsByTagName('story')[0]
+												labels = full_story.getElementsByTagName('labels')
+												if labels:
+													try:
+														labels = labels[0].firstChild.nodeValue.lower().split(',')
+													except AttributeError:
+														# There is a <labels> tag, but its content is empty
+														labels = []
+
+													for i in range(len(labels)-1, -1, -1):
+														if pc and labels[i] == old_proj:
+															del labels[i]
+														elif ac and labels[i] == old_area:
+															del labels[i]
+														elif obj.projsync and labels[i] == case.project_title.lower():
+															del labels[i]
+														elif obj.areasync and labels[i] == case.area_title.lower():
+															del labels[i]
+
+													if obj.projsync:
+														labels.append(case.project_title)
+													if obj.areasync:
+														labels.append(case.area_title)
+
+													data += '<labels>%s</labels>' % escape(','.join(labels))
+
+											except (ExpatError, IndexError), e:
+												logging.exception(str(e))
+												stat = '<span class="error">Error</span>'
+
 
 									data += '</story>'
 
@@ -1258,8 +1495,6 @@ class URLTriggerHandler(webapp.RequestHandler):
 										stype = 'chore'
 										estimate = '1'
 										if not fetched:
-											headers2 = {}
-											headers2['X-TrackerToken'] = obj.pttoken
 											retries = 0
 											while retries <= 2:
 												url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, tid)
