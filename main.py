@@ -395,48 +395,51 @@ class WebHookHandler(webapp.RequestHandler):
 						# to search The FogBugz installation to get the linked case there if existed.
 						full_story = story
 						ptid = story.getElementsByTagName('id')[0].firstChild.nodeValue
-
-						if type != 'story_delete':
-							headers = {}
-							headers['X-TrackerToken'] = obj.pttoken
-							retries = 0
-							while retries <= 2:
-								url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
-								logging.info(url)
-								resp = urlfetch.fetch(url, method='GET', headers=headers, deadline=deadline)
-								if resp.status_code >= 300:
-									logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
-									stat = '<span class="error">Error</span>'
-
-									# If this is a server error, we retry the request up to 2 times
-									if resp.status_code >= 500:
-										retries += 1
-										# Wait a couple seconds before another attempt
-										if offline:
-											time.sleep(retries*2)
-										else:
-											time.sleep(1)
-										continue
-								else:
-									try:
-										logging.info(resp.content)
-										rdom = minidom.parseString(resp.content)
-										full_story = rdom.getElementsByTagName('story')[0]
-									except (ExpatError, IndexError), e:
-										logging.exception(str(e))
-										stat = '<span class="error">Error</span>'
-								break
-
 						fbid = None
-						if full_story == story:
-							# Search in the FogBugz installation
-							if conn is None:
-								conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
 
-							cases = conn.list_cases('tag:"ts@%s-%s"' % (proj_id, ptid), 'ixBug')
-							if cases:
-								fbid = cases[0].id
+						# If there already is an "integration_id" field in story, we don't have to fetch the full story
+						# at all; if not, we don't know whether it's really not in any integration or Tracker just didn't
+						# put related info in the hook body, and thus we have to fetch the full story to make sure.
+						if not full_story.getElementsByTagName('integration_id'):
+							if type != 'story_delete':
+								headers = {}
+								headers['X-TrackerToken'] = obj.pttoken
+								retries = 0
+								while retries <= 2:
+									url = 'https://www.pivotaltracker.com/services/v3/projects/%s/stories/%s' % (proj_id, ptid)
+									logging.info(url)
+									resp = urlfetch.fetch(url, method='GET', headers=headers, deadline=deadline)
+									if resp.status_code >= 300:
+										logging.exception('URLFetch returned with HTTP %s:\n%s' % (resp.status_code, resp.content))
+										stat = '<span class="error">Error</span>'
 
+										# If this is a server error, we retry the request up to 2 times
+										if resp.status_code >= 500:
+											retries += 1
+											# Wait a couple seconds before another attempt
+											if offline:
+												time.sleep(retries*2)
+											else:
+												time.sleep(1)
+											continue
+									else:
+										try:
+											logging.info(resp.content)
+											rdom = minidom.parseString(resp.content)
+											full_story = rdom.getElementsByTagName('story')[0]
+										except (ExpatError, IndexError), e:
+											logging.exception(str(e))
+											stat = '<span class="error">Error</span>'
+									break
+
+							if full_story == story:
+								# Search in the FogBugz installation
+								if conn is None:
+									conn = connection.FogBugzConnection(obj.fburl, obj.fbuser, obj.fbpass, obj.fbtoken, offline=offline)
+
+								cases = conn.list_cases('tag:"ts@%s-%s"' % (proj_id, ptid), 'ixBug')
+								if cases:
+									fbid = cases[0].id
 
 						if fbid:
 							# We already know that this story is an import from this FogBugz installation, no further
