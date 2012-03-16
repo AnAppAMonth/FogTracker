@@ -180,6 +180,7 @@ class FogBugzConnection(Connection):
 			if filter_list.has_error:
 				if filter_list.error_code == 3:
 					# The old token is invalid, log in with username and password to get a new token
+					self.token = None
 					self._logon()
 					# Execute this command again
 					return self.list_filters()
@@ -206,6 +207,7 @@ class FogBugzConnection(Connection):
 			if case_list.has_error:
 				if case_list.error_code == 3:
 					# The old token is invalid, log in with username and password to get a new token
+					self.token = None
 					self._logon()
 					# Execute this command again
 					return self.list_cases(search, cols, max_records)
@@ -236,6 +238,7 @@ class FogBugzConnection(Connection):
 			if case_list.has_error:
 				if case_list.error_code == 3:
 					# The old token is invalid, log in with username and password to get a new token
+					self.token = None
 					self._logon()
 					# Execute this command again
 					return self.edit_case(id, fields, values, cols, cmd)
@@ -258,6 +261,7 @@ class FogBugzConnection(Connection):
 			if status_list.has_error:
 				if status_list.error_code == 3:
 					# The old token is invalid, log in with username and password to get a new token
+					self.token = None
 					self._logon()
 					# Execute this command again
 					return self.list_statuses(category_id, resolved_only)
