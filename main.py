@@ -1396,9 +1396,9 @@ class URLTriggerHandler(webapp.RequestHandler):
 												del case.tags[i]
 
 										labels = case.tags
-										if pc:
+										if obj.projsync:
 											labels.append(case.project_title)
-										if ac:
+										if obj.areasync:
 											labels.append(case.area_title)
 
 										data += '<labels>%s</labels>' % escape(','.join(labels))
